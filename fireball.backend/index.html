@@ -1,64 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fireball AI - Machine Learning Game</title>
-    <meta name="description" content="Challenge a Q-Learning AI in this strategic battle game. Outthink the machine!">
-    
-    <!-- Nunito Sans - Professional variant of Nunito -->
+    <title>Fireball</title>
+    <meta name="description"
+        content="Strategic battle game powered by machine learning. Challenge the AI or play against friends online.">
+    <link rel="icon" type="image/png" href="/logo.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap" rel="stylesheet">
-    
-    <!-- React -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800&display=swap"
+        rel="stylesheet">
+
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* ============================================
-           FIREBALL DESIGN SYSTEM
-           Fire gradients (red/orange/yellow) + cool accents (purple/indigo/blue)
-           ============================================ */
-        
         :root {
-            /* Fire gradient colors */
             --fire-red: #dc2626;
             --fire-orange: #ea580c;
             --fire-amber: #f59e0b;
-            --fire-yellow: #fbbf24;
-            
-            /* Cool accent colors */
             --accent-purple: #7c3aed;
             --accent-indigo: #4f46e5;
-            --accent-blue: #2563eb;
-            --accent-violet: #8b5cf6;
-            
-            /* Backgrounds */
             --bg-primary: #0c0a14;
             --bg-secondary: #14101f;
             --bg-card: #1a1528;
             --bg-card-hover: #221d32;
-            
-            /* Text */
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
             --text-muted: #64748b;
-            
-            /* Borders */
             --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-accent: rgba(234, 88, 12, 0.4);
-            
-            /* Shadows */
-            --glow-fire: 0 0 30px rgba(234, 88, 12, 0.3), 0 0 60px rgba(220, 38, 38, 0.15);
-            --glow-purple: 0 0 30px rgba(124, 58, 237, 0.3), 0 0 60px rgba(79, 70, 229, 0.15);
-            
-            /* Gradients */
-            --gradient-fire: linear-gradient(135deg, var(--fire-red), var(--fire-orange), var(--fire-amber));
-            --gradient-fire-soft: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(234, 88, 12, 0.1), rgba(245, 158, 11, 0.05));
-            --gradient-cool: linear-gradient(135deg, var(--accent-purple), var(--accent-indigo), var(--accent-blue));
-            --gradient-cool-soft: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(79, 70, 229, 0.1), rgba(37, 99, 235, 0.05));
         }
 
         * {
@@ -68,1044 +43,1087 @@
         }
 
         body {
-            font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Nunito Sans', sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            background-image: 
-                radial-gradient(ellipse at 20% 0%, rgba(124, 58, 237, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 100%, rgba(234, 88, 12, 0.06) 0%, transparent 50%);
         }
 
-        /* ============================================
-           TYPOGRAPHY
-           ============================================ */
-        
-        h1, h2, h3 {
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        h1 {
-            font-size: 2.25rem;
-        }
-
-        h2 {
-            font-size: 1.5rem;
-        }
-
-        h3 {
-            font-size: 1.125rem;
-        }
-
-        /* ============================================
-           LAYOUT
-           ============================================ */
-        
-        .app-container {
+        .app {
             min-height: 100vh;
-            width: 100%;
-            padding: 1.5rem;
+            padding: 2rem;
+        }
+
+        /* Homepage */
+        .home-container {
+            min-height: calc(100vh - 4rem);
             display: flex;
             flex-direction: column;
             align-items: center;
-        }
-
-        .content-wrapper {
-            width: 100%;
-            max-width: 800px;
-        }
-
-        /* ============================================
-           HEADER
-           ============================================ */
-        
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .logo-container {
-            width: 56px;
-            height: 56px;
-            display: flex;
-            align-items: center;
             justify-content: center;
-            background: var(--gradient-fire);
-            border-radius: 12px;
-            box-shadow: var(--glow-fire);
+            gap: 3rem;
         }
 
-        .logo-icon {
-            font-size: 1.75rem;
-            filter: brightness(1.2);
+        .home-header {
+            text-align: center;
         }
 
-        .header-text h1 {
-            background: var(--gradient-fire);
+        .home-logo {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+        }
+
+        .home-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--fire-red), var(--fire-orange), var(--fire-amber));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .header-text p {
+        .home-subtitle {
             color: var(--text-secondary);
-            font-size: 0.875rem;
-            margin-top: 0.125rem;
+            font-size: 1.125rem;
+            margin-top: 0.5rem;
         }
 
-        /* ============================================
-           NAVIGATION
-           ============================================ */
-        
-        .nav-container {
-            display: flex;
-            gap: 0.5rem;
-            padding: 0.375rem;
+        .home-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .home-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .home-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-4px);
+            border-color: var(--fire-orange);
+        }
+
+        .home-card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .home-card-desc {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+        }
+
+        .home-card.primary {
+            border-color: var(--fire-orange);
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(234, 88, 12, 0.05));
+        }
+
+        /* Admin button */
+        .admin-trigger {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            width: 32px;
+            height: 32px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.3;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .admin-trigger:hover {
+            opacity: 1;
+        }
+
+        /* Game page */
+        .game-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .game-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
             margin-bottom: 2rem;
         }
 
-        .nav-button {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.25rem;
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            font-family: inherit;
-            font-size: 0.9375rem;
-            font-weight: 500;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.2s ease;
+        .game-logo {
+            width: 48px;
+            height: 48px;
         }
 
-        .nav-button:hover {
-            background: var(--bg-card);
+        .game-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9375rem;
+            font-family: inherit;
+            margin-left: auto;
+        }
+
+        .back-btn:hover {
             color: var(--text-primary);
         }
 
-        .nav-button.active {
-            background: var(--gradient-cool);
-            color: white;
-            box-shadow: var(--glow-purple);
-        }
-
-        .nav-button .icon {
-            font-size: 1.125rem;
-        }
-
-        /* ============================================
-           CARDS
-           ============================================ */
-        
-        .card {
+        .charge-display {
+            display: flex;
+            justify-content: space-between;
+            padding: 2rem 3rem;
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 16px;
-            padding: 1.5rem;
-            transition: all 0.2s ease;
-        }
-
-        .card-header {
-            margin-bottom: 1.5rem;
-        }
-
-        .card-header h2 {
-            margin-bottom: 0.25rem;
-        }
-
-        .card-header p {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-
-        /* ============================================
-           CHARGE DISPLAY
-           ============================================ */
-        
-        .charge-display {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .charge-block {
             text-align: center;
-        }
-
-        .charge-block.player .charge-label {
-            color: var(--fire-orange);
-        }
-
-        .charge-block.opponent .charge-label {
-            color: var(--accent-violet);
+            flex: 1;
         }
 
         .charge-label {
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
 
         .charge-value {
-            font-size: 3.5rem;
+            font-size: 4rem;
             font-weight: 800;
             line-height: 1;
         }
 
-        .charge-divider {
-            width: 1px;
-            height: 60px;
-            background: var(--border-subtle);
+        .player-charge .charge-label {
+            color: var(--fire-orange);
         }
 
-        .vs-badge {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
+        .opponent-charge .charge-label {
+            color: var(--accent-purple);
         }
 
-        /* ============================================
-           MOVE BUTTONS
-           ============================================ */
-        
         .moves-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(5, 1fr);
             gap: 1rem;
         }
 
-        .move-button {
+        .move-btn {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            padding: 1.5rem 1rem;
-            background: var(--bg-secondary);
+            gap: 0.5rem;
+            padding: 1.5rem 0.5rem;
+            background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
             color: var(--text-primary);
             font-family: inherit;
-            font-size: 0.9375rem;
+            font-size: 0.875rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }
 
-        .move-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            border-color: var(--border-accent);
+        .move-btn:hover:not(:disabled) {
+            background: var(--bg-card-hover);
+            border-color: var(--fire-orange);
         }
 
-        .move-button:disabled {
-            opacity: 0.4;
+        .move-btn:disabled {
+            opacity: 0.35;
             cursor: not-allowed;
         }
 
-        .move-button .move-icon {
-            font-size: 2rem;
+        .move-btn .cost {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 400;
         }
 
-        /* Move-specific colors */
-        .move-button.charge {
-            --move-color: #facc15;
-        }
-        .move-button.charge:hover:not(:disabled) {
-            background: rgba(250, 204, 21, 0.1);
-            box-shadow: 0 0 20px rgba(250, 204, 21, 0.2);
+        .history-section {
+            margin-top: 2.5rem;
         }
 
-        .move-button.shield {
-            --move-color: #60a5fa;
-        }
-        .move-button.shield:hover:not(:disabled) {
-            background: rgba(96, 165, 250, 0.1);
-            box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
-        }
-
-        .move-button.fireball {
-            --move-color: #ef4444;
-        }
-        .move-button.fireball:hover:not(:disabled) {
-            background: rgba(239, 68, 68, 0.1);
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
-        }
-
-        .move-button.iceball {
-            --move-color: #22d3ee;
-        }
-        .move-button.iceball:hover:not(:disabled) {
-            background: rgba(34, 211, 238, 0.1);
-            box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
-        }
-
-        .move-button.megaball {
-            --move-color: #a855f7;
-        }
-        .move-button.megaball:hover:not(:disabled) {
-            background: rgba(168, 85, 247, 0.1);
-            box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
-        }
-
-        .move-button .move-icon {
-            filter: drop-shadow(0 0 8px var(--move-color));
-        }
-
-        /* ============================================
-           BUTTONS
-           ============================================ */
-        
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            background: var(--gradient-fire);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-family: inherit;
+        .history-title {
             font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: var(--glow-fire);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            filter: brightness(1.1);
-        }
-
-        .btn-secondary {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 0.9375rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .btn-secondary:hover {
-            background: var(--bg-card-hover);
-            border-color: var(--border-accent);
-        }
-
-        /* ============================================
-           HISTORY
-           ============================================ */
-        
-        .history-container {
-            margin-top: 2rem;
-        }
-
-        .history-container h3 {
-            margin-bottom: 1rem;
+            font-weight: 600;
             color: var(--text-secondary);
+            margin-bottom: 1rem;
         }
 
         .history-list {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
-            max-height: 280px;
+            gap: 0.5rem;
+            max-height: 200px;
             overflow-y: auto;
-            padding: 1rem;
-            background: var(--bg-secondary);
-            border-radius: 12px;
         }
 
         .history-item {
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 0.875rem 1rem;
-            background: var(--bg-card);
-            border-radius: 8px;
-        }
-
-        .history-moves {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
             font-size: 0.875rem;
         }
 
-        .history-moves .player-move {
+        .history-item span {
+            color: var(--text-secondary);
+        }
+
+        .history-item .you {
             color: var(--fire-orange);
         }
 
-        .history-moves .ai-move {
-            color: var(--accent-violet);
+        .history-item .opp {
+            color: var(--accent-purple);
         }
 
-        .history-result {
-            font-size: 0.8125rem;
-            font-weight: 600;
-            padding: 0.375rem 0.75rem;
-            background: var(--bg-secondary);
-            border-radius: 6px;
-            color: var(--text-secondary);
-        }
-
-        /* ============================================
-           ALERTS & MESSAGES
-           ============================================ */
-        
-        .alert {
-            padding: 1rem 1.25rem;
-            border-radius: 10px;
-            margin-bottom: 1.5rem;
-            font-size: 0.9375rem;
-        }
-
-        .alert-error {
-            background: rgba(220, 38, 38, 0.15);
-            border: 1px solid rgba(220, 38, 38, 0.3);
-            color: #fca5a5;
-        }
-
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            color: #fcd34d;
-        }
-
-        .alert-title {
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-
-        /* ============================================
-           END GAME
-           ============================================ */
-        
+        /* End game */
         .end-game {
             text-align: center;
-            padding: 2rem;
+            padding: 3rem 2rem;
         }
 
-        .end-game-title {
+        .end-title {
             font-size: 2.5rem;
             font-weight: 800;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
 
-        .end-game-title.win {
-            background: var(--gradient-fire);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .end-title.win {
+            color: var(--fire-orange);
         }
 
-        .end-game-title.lose {
+        .end-title.lose {
             color: var(--text-secondary);
         }
 
-        /* ============================================
-           STATS PAGE
-           ============================================ */
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
+        .end-subtitle {
+            color: var(--text-secondary);
             margin-bottom: 2rem;
         }
 
-        .stat-card {
-            padding: 1.25rem;
-            background: var(--bg-secondary);
+        .btn {
+            padding: 1rem 2rem;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--fire-red), var(--fire-orange));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
+            color: var(--text-primary);
         }
 
-        .stat-card .stat-label {
-            font-size: 0.8125rem;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+        /* Guide page */
+        .guide-container {
+            max-width: 700px;
+            margin: 0 auto;
         }
 
-        .stat-card .stat-value {
-            font-size: 2rem;
-            font-weight: 800;
+        .guide-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 2.5rem;
         }
 
-        .recent-matches {
-            margin-top: 1.5rem;
+        .guide-content h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
         }
 
-        .match-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem;
-            background: var(--bg-secondary);
-            border-radius: 10px;
+        .guide-content h3 {
+            font-size: 1.125rem;
+            margin-top: 2rem;
             margin-bottom: 0.75rem;
-        }
-
-        .match-winner {
-            font-weight: 700;
             color: var(--fire-orange);
         }
 
-        .match-details {
-            font-size: 0.8125rem;
-            color: var(--text-muted);
+        .guide-content p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
         }
 
-        /* ============================================
-           1V1 PAGE
-           ============================================ */
-        
-        .coming-soon-badge {
-            display: inline-block;
-            padding: 0.375rem 0.75rem;
-            background: var(--gradient-cool);
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-left: 0.75rem;
+        .guide-content ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .guide-content li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .guide-content li:last-child {
+            border-bottom: none;
+        }
+
+        .guide-content strong {
+            color: var(--text-primary);
+        }
+
+        /* 1v1 */
+        .matchmaking-status {
+            text-align: center;
+            padding: 3rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .matchmaking-status p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
         }
 
         .input-field {
             width: 100%;
+            max-width: 300px;
             padding: 1rem;
             background: var(--bg-secondary);
             border: 1px solid var(--border-subtle);
-            border-radius: 10px;
             color: var(--text-primary);
             font-family: inherit;
             font-size: 1rem;
-            transition: all 0.2s ease;
+            margin-bottom: 1rem;
         }
 
         .input-field:focus {
             outline: none;
-            border-color: var(--accent-violet);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+            border-color: var(--accent-purple);
         }
 
-        .input-field:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* Stats modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
         }
 
-        /* ============================================
-           LOADER
-           ============================================ */
-        
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal h3 {
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: 700;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            color: #fca5a5;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Loader */
         .loader {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--bg-card);
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--bg-secondary);
             border-top-color: var(--fire-orange);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            animation: spin 0.7s linear infinite;
+            margin: 2rem auto;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
-        .loader-container {
-            display: flex;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        /* ============================================
-           RESPONSIVE
-           ============================================ */
-        
-        @media (max-width: 640px) {
-            .header h1 {
-                font-size: 1.75rem;
+        /* Mobile */
+        @media (max-width: 768px) {
+            .app {
+                padding: 1rem;
             }
 
-            .nav-container {
-                flex-wrap: wrap;
-            }
-
-            .nav-button {
-                flex: 1;
-                justify-content: center;
-                padding: 0.625rem 0.75rem;
-                font-size: 0.8125rem;
-            }
-
-            .nav-button span:not(.icon) {
-                display: none;
-            }
-
-            .charge-display {
-                grid-template-columns: 1fr 1fr;
+            .home-grid {
+                grid-template-columns: 1fr;
                 gap: 1rem;
             }
 
-            .charge-divider {
-                display: none;
-            }
-
-            .charge-value {
-                font-size: 2.5rem;
+            .home-title {
+                font-size: 2rem;
             }
 
             .moves-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .charge-display {
+                padding: 1.5rem;
+            }
+
+            .charge-value {
+                font-size: 3rem;
+            }
+
+            .guide-content {
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .moves-grid {
                 grid-template-columns: repeat(2, 1fr);
-            }
-
-            .move-button {
-                padding: 1rem 0.75rem;
-            }
-
-            .move-button .move-icon {
-                font-size: 1.5rem;
             }
         }
     </style>
 </head>
+
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
         const { createRoot } = ReactDOM;
 
-        // Move icons with emoji
-        const MOVE_ICONS = {
-            charge: "⚡",
-            shield: "🛡️",
-            fireball: "🔥",
-            iceball: "❄️",
-            megaball: "💥"
+        const ADMIN_HASH = '7aaba46bd7b8139d93b3c843825a411d90d6f5adfcbf0c3766a90e72dfc1d4e7';
+
+        const MOVES = [
+            { id: 'charge', name: 'Charge', cost: 0, costDisplay: '+1' },
+            { id: 'shield', name: 'Shield', cost: 0, costDisplay: '0' },
+            { id: 'fireball', name: 'Fireball', cost: 1, costDisplay: '-1' },
+            { id: 'iceball', name: 'Iceball', cost: 2, costDisplay: '-2' },
+            { id: 'megaball', name: 'Megaball', cost: 5, costDisplay: '-5' }
+        ];
+
+        const getLegalMoves = (charges) => {
+            return MOVES.filter(m => {
+                if (m.id === 'charge' || m.id === 'shield') return true;
+                return charges >= m.cost;
+            }).map(m => m.id);
         };
 
-        const NAV_ICONS = {
-            playAI: "🧠",
-            play1v1: "⚔️",
-            stats: "📊"
-        };
-
-        const GameLogic = {
-            getLegalMoves: (charges) => {
-                const moves = ["charge", "shield"];
-                if (charges >= 1) moves.push("fireball");
-                if (charges >= 2) moves.push("iceball");
-                if (charges >= 5) moves.push("megaball");
-                return moves;
-            }
-        };
-
-        function Header() {
-            return (
-                <header className="header">
-                    <div className="logo-container">
-                        <span className="logo-icon">🔥</span>
-                    </div>
-                    <div className="header-text">
-                        <h1>Fireball AI</h1>
-                        <p>Q-Learning Machine Intelligence</p>
-                    </div>
-                </header>
-            );
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        function NavButton({ icon, label, isActive, onClick }) {
-            return (
-                <button
-                    onClick={onClick}
-                    className={`nav-button ${isActive ? 'active' : ''}`}
-                >
-                    <span className="icon">{icon}</span>
-                    <span>{label}</span>
-                </button>
-            );
-        }
+        function HomePage({ onNavigate }) {
+            const [showAdminModal, setShowAdminModal] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [stats, setStats] = useState(null);
 
-        function ChargeDisplay({ playerCharges, oppCharges, p1Label = "Your", p2Label = "AI" }) {
-            return (
-                <div className="charge-display">
-                    <div className="charge-block player">
-                        <div className="charge-label">{p1Label} Charges</div>
-                        <div className="charge-value">{playerCharges}</div>
-                    </div>
-                    <div className="charge-divider">
-                        <span className="vs-badge">VS</span>
-                    </div>
-                    <div className="charge-block opponent">
-                        <div className="charge-label">{p2Label} Charges</div>
-                        <div className="charge-value">{oppCharges}</div>
-                    </div>
-                </div>
-            );
-        }
-
-        function MoveSelector({ legalMoves, onMoveSelect, disabled }) {
-            const allMoves = ["charge", "shield", "fireball", "iceball", "megaball"];
-
-            return (
-                <div className="moves-grid">
-                    {allMoves.map(move => {
-                        const isLegal = legalMoves.includes(move);
-                        return (
-                            <button
-                                key={move}
-                                onClick={() => isLegal && onMoveSelect(move)}
-                                disabled={disabled || !isLegal}
-                                className={`move-button ${move}`}
-                            >
-                                <span className="move-icon">{MOVE_ICONS[move]}</span>
-                                <span>{move.charAt(0).toUpperCase() + move.slice(1)}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            );
-        }
-
-        function EndGameDisplay({ winner, onPlayAgain }) {
-            const isPlayerWin = winner === 'player1' || winner === 'human';
-            
-            return (
-                <div className="end-game">
-                    <h2 className={`end-game-title ${isPlayerWin ? 'win' : 'lose'}`}>
-                        {isPlayerWin ? "Victory! 🎉" : "Defeated 😔"}
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                        {isPlayerWin 
-                            ? "You outplayed the machine learning model!" 
-                            : "The AI predicted your strategy. Try again!"}
-                    </p>
-                    <button onClick={onPlayAgain} className="btn-primary">
-                        Play Again
-                    </button>
-                </div>
-            );
-        }
-
-        function HistoryDisplay({ history }) {
-            if (history.length === 0) return null;
-            
-            return (
-                <div className="history-container">
-                    <h3>Turn History</h3>
-                    <div className="history-list">
-                        {history.map((turn, i) => (
-                            <div key={i} className="history-item">
-                                <div className="history-moves">
-                                    <span className="player-move">You: {turn.player}</span>
-                                    <span className="ai-move">AI: {turn.ai}</span>
-                                </div>
-                                <span className="history-result">{turn.result}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        }
-
-        function PlayAIPage() {
-            const [game, setGame] = useState({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
-            const [history, setHistory] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-
-            const legalMoves = GameLogic.getLegalMoves(game.playerCharges);
-
-            const handlePlayMove = async (move) => {
-                setLoading(true);
-                setError(null);
-                
-                try {
-                    const response = await fetch('/api/play_ai', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            playerMove: move,
-                            playerCharges: game.playerCharges,
-                            aiCharges: game.aiCharges,
-                            moveHistory: history.map(h => h.player),
-                            oppMoveHistory: history.map(h => h.ai),
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    
-                    const data = await response.json();
-                    
-                    setGame({
-                        playerCharges: data.playerCharges,
-                        aiCharges: data.aiCharges,
-                        gameOver: data.gameOver,
-                        winner: data.winner
-                    });
-                    
-                    setHistory([
-                        { player: move, ai: data.aiMove, result: data.result },
-                        ...history
-                    ]);
-
-                } catch (err) {
-                    setError('Failed to connect to AI backend. Please ensure the API is deployed.');
-                    console.error(err);
+            const handleAdminLogin = async () => {
+                const hash = await sha256(adminPassword);
+                if (hash === ADMIN_HASH) {
+                    setIsAdmin(true);
+                    fetchStats();
+                } else {
+                    alert('Incorrect password');
                 }
-                setLoading(false);
+                setAdminPassword('');
             };
 
-            const handlePlayAgain = () => {
-                setGame({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
-                setHistory([]);
-                setError(null);
+            const fetchStats = async () => {
+                try {
+                    const res = await fetch('/api/stats');
+                    const data = await res.json();
+                    setStats(data);
+                } catch (e) {
+                    setStats({ error: 'Failed to load stats' });
+                }
             };
 
             return (
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Challenge the AI</h2>
-                        <p>Outthink the Q-Learning model to win</p>
+                <div className="home-container">
+                    <div className="home-header">
+                        <img src="/logo.png" alt="Fireball" className="home-logo" />
+                        <h1 className="home-title">Fireball</h1>
+                        <p className="home-subtitle">Strategic battle game powered by machine learning</p>
                     </div>
-                    
-                    <ChargeDisplay playerCharges={game.playerCharges} oppCharges={game.aiCharges} />
-                    
-                    {error && (
-                        <div className="alert alert-error">
-                            <div className="alert-title">Connection Error</div>
-                            <div>{error}</div>
+
+                    <div className="home-grid">
+                        <div className="home-card" onClick={() => onNavigate('play-ai')}>
+                            <h2 className="home-card-title">Play vs ML Model</h2>
+                            <p className="home-card-desc">Challenge the Q-learning AI trained on thousands of games</p>
+                        </div>
+
+                        <div className="home-card primary" onClick={() => onNavigate('guide')}>
+                            <h2 className="home-card-title">How to Play</h2>
+                            <p className="home-card-desc">Learn the rules and master the strategy</p>
+                        </div>
+
+                        <div className="home-card" onClick={() => onNavigate('play-1v1')}>
+                            <h2 className="home-card-title">Play Online</h2>
+                            <p className="home-card-desc">Real-time matches against other players</p>
+                        </div>
+                    </div>
+
+                    <button className="admin-trigger" onClick={() => setShowAdminModal(true)}>
+                        A
+                    </button>
+
+                    {showAdminModal && (
+                        <div className="modal-overlay" onClick={() => { setShowAdminModal(false); setIsAdmin(false); }}>
+                            <div className="modal" onClick={e => e.stopPropagation()}>
+                                {!isAdmin ? (
+                                    <>
+                                        <h3>Admin Access</h3>
+                                        <input
+                                            type="password"
+                                            className="input-field"
+                                            placeholder="Password"
+                                            value={adminPassword}
+                                            onChange={e => setAdminPassword(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
+                                        />
+                                        <button className="btn btn-primary" onClick={handleAdminLogin}>
+                                            Login
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h3>Statistics</h3>
+                                        {stats ? (
+                                            stats.error ? (
+                                                <p style={{ color: 'var(--text-secondary)' }}>{stats.error}</p>
+                                            ) : (
+                                                <>
+                                                    <div className="stat-row">
+                                                        <span className="stat-label">Unique Visitors</span>
+                                                        <span className="stat-value">{stats.uniqueVisitors || 0}</span>
+                                                    </div>
+                                                    <div className="stat-row">
+                                                        <span className="stat-label">AI Win Rate</span>
+                                                        <span className="stat-value">{stats.aiWinRate || 0}%</span>
+                                                    </div>
+                                                    <div className="stat-row">
+                                                        <span className="stat-label">Total AI Games</span>
+                                                        <span className="stat-value">{stats.aiGames || 0}</span>
+                                                    </div>
+                                                    <div className="stat-row">
+                                                        <span className="stat-label">Avg Match Length</span>
+                                                        <span className="stat-value">{stats.avgMatchLength || 0} rounds</span>
+                                                    </div>
+                                                </>
+                                            )
+                                        ) : (
+                                            <div className="loader"></div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         </div>
                     )}
-                    
-                    {game.gameOver ? (
-                        <EndGameDisplay winner={game.winner} onPlayAgain={handlePlayAgain} />
-                    ) : (
-                        <MoveSelector
-                            legalMoves={legalMoves}
-                            onMoveSelect={handlePlayMove}
-                            disabled={loading}
-                        />
-                    )}
-                    
-                    {loading && (
-                        <div className="loader-container">
-                            <div className="loader"></div>
-                        </div>
-                    )}
-                    
-                    <HistoryDisplay history={history} />
                 </div>
             );
         }
 
-        function Play1v1Page() {
-            const [username, setUsername] = useState("");
-            
+        function GuidePage({ onNavigate }) {
             return (
-                <div className="card">
-                    <div className="card-header">
-                        <h2>
-                            1v1 Battle
-                            <span className="coming-soon-badge">Coming Soon</span>
-                        </h2>
-                        <p>Real-time matches against other players</p>
+                <div className="guide-container">
+                    <div className="game-header">
+                        <img src="/logo.png" alt="" className="game-logo" />
+                        <h1 className="game-title">How to Play</h1>
+                        <button className="back-btn" onClick={() => onNavigate('home')}>Back to Menu</button>
                     </div>
-                    
-                    <div className="alert alert-warning">
-                        <div className="alert-title">Under Development</div>
-                        <div>Real-time matchmaking is being rebuilt for Vercel deployment.</div>
-                    </div>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', opacity: 0.5 }}>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Enter your username"
-                            disabled
-                            className="input-field"
-                        />
-                        <button disabled className="btn-secondary" style={{ width: '100%', opacity: 0.5 }}>
-                            Find Match
+
+                    <div className="guide-content">
+                        <h2>The Basics</h2>
+                        <p>
+                            Fireball is a turn-based strategy game where you and your opponent choose moves simultaneously.
+                            The goal is simple: land a successful attack on your opponent before they get you.
+                        </p>
+
+                        <h3>Moves</h3>
+                        <ul>
+                            <li>
+                                <strong>Charge</strong> - Gain 1 energy. You need energy to use attacks.
+                                This is your bread and butter, but be careful - you are vulnerable while charging.
+                            </li>
+                            <li>
+                                <strong>Shield</strong> - Blocks all attacks except Megaball. Costs nothing.
+                                Use it when you think your opponent is about to attack.
+                            </li>
+                            <li>
+                                <strong>Fireball</strong> - Costs 1 energy. Defeats an opponent who is charging.
+                                Gets blocked by Shield and beaten by Iceball.
+                            </li>
+                            <li>
+                                <strong>Iceball</strong> - Costs 2 energy. Defeats Fireball and Charge.
+                                Still gets blocked by Shield.
+                            </li>
+                            <li>
+                                <strong>Megaball</strong> - Costs 5 energy. Instantly wins the game.
+                                Cannot be blocked. Only countered by another Megaball.
+                            </li>
+                        </ul>
+
+                        <h3>Strategy Tips</h3>
+                        <p>
+                            The game is all about reading your opponent. If they just used their last charge on an attack,
+                            they will probably need to charge again - perfect time for a Fireball. If you have been
+                            charging a lot, they might expect an attack and Shield - so maybe charge one more time.
+                        </p>
+                        <p>
+                            The Megaball race is real. Once someone hits 4 or 5 charges, the pressure is on.
+                            Do you try to rush them down, or go for your own Megaball?
+                        </p>
+
+                        <h3>Playing the AI</h3>
+                        <p>
+                            The ML model has been trained on thousands of games using Q-learning.
+                            It learns patterns and will adapt to predictable play. Mix up your strategy to keep it guessing.
+                        </p>
+
+                        <button className="btn btn-primary" onClick={() => onNavigate('play-ai')} style={{ marginTop: '2rem' }}>
+                            Start Playing
                         </button>
                     </div>
                 </div>
             );
         }
 
-        function StatCard({ label, value }) {
+        function PlayAIPage({ onNavigate }) {
+            const [game, setGame] = useState({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
+            const [history, setHistory] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const legalMoves = getLegalMoves(game.playerCharges);
+
+            const handleMove = async (move) => {
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const res = await fetch('/api/play_ai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            playerMove: move,
+                            playerCharges: game.playerCharges,
+                            aiCharges: game.aiCharges,
+                            moveHistory: history.map(h => h.player),
+                            oppMoveHistory: history.map(h => h.ai)
+                        })
+                    });
+
+                    if (!res.ok) throw new Error('Request failed');
+
+                    const data = await res.json();
+
+                    setGame({
+                        playerCharges: data.playerCharges,
+                        aiCharges: data.aiCharges,
+                        gameOver: data.gameOver,
+                        winner: data.winner
+                    });
+
+                    setHistory([{ player: move, ai: data.aiMove, result: data.result }, ...history]);
+                } catch (e) {
+                    setError('Failed to connect to the AI backend.');
+                }
+
+                setLoading(false);
+            };
+
+            const resetGame = () => {
+                setGame({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
+                setHistory([]);
+                setError(null);
+            };
+
             return (
-                <div className="stat-card">
-                    <div className="stat-label">{label}</div>
-                    <div className="stat-value">{value}</div>
+                <div className="game-container">
+                    <div className="game-header">
+                        <img src="/logo.png" alt="" className="game-logo" />
+                        <h1 className="game-title">vs ML Model</h1>
+                        <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
+                    </div>
+
+                    {error && <div className="alert">{error}</div>}
+
+                    <div className="charge-display">
+                        <div className="charge-block player-charge">
+                            <div className="charge-label">Your Charges</div>
+                            <div className="charge-value">{game.playerCharges}</div>
+                        </div>
+                        <div className="charge-block opponent-charge">
+                            <div className="charge-label">AI Charges</div>
+                            <div className="charge-value">{game.aiCharges}</div>
+                        </div>
+                    </div>
+
+                    {game.gameOver ? (
+                        <div className="end-game">
+                            <h2 className={`end-title ${game.winner === 'player1' ? 'win' : 'lose'}`}>
+                                {game.winner === 'player1' ? 'You Win' : 'AI Wins'}
+                            </h2>
+                            <p className="end-subtitle">
+                                {game.winner === 'player1'
+                                    ? 'Nice work. You outplayed the model.'
+                                    : 'The AI predicted your moves. Try a different strategy.'}
+                            </p>
+                            <button className="btn btn-primary" onClick={resetGame}>Play Again</button>
+                        </div>
+                    ) : (
+                        <div className="moves-grid">
+                            {MOVES.map(move => (
+                                <button
+                                    key={move.id}
+                                    className="move-btn"
+                                    disabled={loading || !legalMoves.includes(move.id)}
+                                    onClick={() => handleMove(move.id)}
+                                >
+                                    <span>{move.name}</span>
+                                    <span className="cost">{move.costDisplay}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {loading && <div className="loader"></div>}
+
+                    {history.length > 0 && (
+                        <div className="history-section">
+                            <h3 className="history-title">History</h3>
+                            <div className="history-list">
+                                {history.map((h, i) => (
+                                    <div key={i} className="history-item">
+                                        <span>You: <span className="you">{h.player}</span></span>
+                                        <span>AI: <span className="opp">{h.ai}</span></span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
 
-        function StatsPage() {
-            const [stats, setStats] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
+        function Play1v1Page({ onNavigate }) {
+            const [username, setUsername] = useState('');
+            const [playerId] = useState(() => 'player_' + Math.random().toString(36).substr(2, 9));
+            const [status, setStatus] = useState('idle'); // idle, searching, matched, playing
+            const [matchId, setMatchId] = useState(null);
+            const [opponent, setOpponent] = useState('');
+            const [gameState, setGameState] = useState(null);
+            const [history, setHistory] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [pollInterval, setPollInterval] = useState(null);
 
-            useEffect(() => {
-                const fetchStats = async () => {
-                    setLoading(true);
-                    setError(null);
+            const findMatch = async () => {
+                if (!username.trim()) {
+                    alert('Please enter a username');
+                    return;
+                }
+
+                setStatus('searching');
+
+                try {
+                    const res = await fetch('/api/matchmaking', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'find_match', playerId, username })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.status === 'matched') {
+                        setMatchId(data.matchId);
+                        setOpponent(data.opponent);
+                        setStatus('playing');
+                        startPolling(data.matchId);
+                    } else if (data.status === 'waiting') {
+                        startCheckingForMatch();
+                    }
+                } catch (e) {
+                    setStatus('idle');
+                    alert('Failed to connect to matchmaking server');
+                }
+            };
+
+            const startCheckingForMatch = () => {
+                const interval = setInterval(async () => {
                     try {
-                        const response = await fetch('/api/stats');
-                        if (!response.ok) throw new Error('Failed to fetch stats');
-                        const data = await response.json();
-                        setStats(data);
-                    } catch (err) {
-                        setError("Stats backend not connected. Showing placeholder data.");
-                        setStats({
-                            uniqueVisitors: 0,
-                            aiWinRate: 0,
-                            aiGames: 0,
-                            avgMatchLength: 0,
-                            recentMatches: []
+                        const res = await fetch('/api/matchmaking', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'check_match', playerId })
+                        });
+
+                        const data = await res.json();
+
+                        if (data.status === 'matched') {
+                            clearInterval(interval);
+                            setMatchId(data.matchId);
+                            setOpponent(data.opponent);
+                            setStatus('playing');
+                            startPolling(data.matchId);
+                        }
+                    } catch (e) {
+                        console.error('Check match error:', e);
+                    }
+                }, 2000);
+
+                setPollInterval(interval);
+            };
+
+            const startPolling = (mId) => {
+                const interval = setInterval(() => fetchGameState(mId), 1500);
+                setPollInterval(interval);
+                fetchGameState(mId);
+            };
+
+            const fetchGameState = async (mId) => {
+                try {
+                    const res = await fetch('/api/matchmaking', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'get_game_state', matchId: mId, playerId })
+                    });
+
+                    const data = await res.json();
+                    setGameState(data);
+
+                    if (data.lastResult && data.lastMyMove) {
+                        setHistory(prev => {
+                            if (prev.length === 0 || prev[0].you !== data.lastMyMove || prev[0].opp !== data.lastOpponentMove) {
+                                return [{ you: data.lastMyMove, opp: data.lastOpponentMove }, ...prev.slice(0, 9)];
+                            }
+                            return prev;
                         });
                     }
-                    setLoading(false);
-                };
-                
-                fetchStats();
-            }, []);
 
-            if (loading) {
-                return (
-                    <div className="card">
-                        <div className="loader-container">
-                            <div className="loader"></div>
-                        </div>
-                    </div>
-                );
-            }
+                    if (data.status === 'finished') {
+                        clearInterval(pollInterval);
+                    }
+                } catch (e) {
+                    console.error('Fetch state error:', e);
+                }
+            };
+
+            const submitMove = async (move) => {
+                setLoading(true);
+
+                try {
+                    await fetch('/api/matchmaking', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'submit_move', matchId, playerId, move })
+                    });
+                } catch (e) {
+                    console.error('Submit move error:', e);
+                }
+
+                setLoading(false);
+            };
+
+            const leaveQueue = async () => {
+                if (pollInterval) clearInterval(pollInterval);
+
+                await fetch('/api/matchmaking', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'leave_queue', playerId })
+                });
+
+                setStatus('idle');
+            };
+
+            const resetMatch = () => {
+                if (pollInterval) clearInterval(pollInterval);
+                setStatus('idle');
+                setMatchId(null);
+                setOpponent('');
+                setGameState(null);
+                setHistory([]);
+            };
+
+            useEffect(() => {
+                return () => {
+                    if (pollInterval) clearInterval(pollInterval);
+                };
+            }, [pollInterval]);
+
+            const myCharges = gameState?.myCharges || 0;
+            const legalMoves = getLegalMoves(myCharges);
 
             return (
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Live Statistics</h2>
-                        <p>Real-time game metrics and performance</p>
+                <div className="game-container">
+                    <div className="game-header">
+                        <img src="/logo.png" alt="" className="game-logo" />
+                        <h1 className="game-title">Play Online</h1>
+                        <button className="back-btn" onClick={() => { leaveQueue(); onNavigate('home'); }}>Back</button>
                     </div>
-                    
-                    {error && (
-                        <div className="alert alert-warning">
-                            <div>{error}</div>
+
+                    {status === 'idle' && (
+                        <div className="matchmaking-status">
+                            <p>Enter a username to find an opponent</p>
+                            <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Username"
+                                value={username}
+                                onChange={e => setUsername(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && findMatch()}
+                            />
+                            <br />
+                            <button className="btn btn-primary" onClick={findMatch}>Find Match</button>
                         </div>
                     )}
-                    
-                    <div className="stats-grid">
-                        <StatCard label="Unique Visitors" value={stats.uniqueVisitors} />
-                        <StatCard label="AI Win Rate" value={`${stats.aiWinRate}%`} />
-                        <StatCard label="Avg. Match" value={`${stats.avgMatchLength} rounds`} />
-                    </div>
-                    
-                    <div className="recent-matches">
-                        <h3 style={{ marginBottom: '1rem' }}>Recent Matches</h3>
-                        {stats.recentMatches.length > 0 ? (
-                            <div>
-                                {stats.recentMatches.map((match, i) => (
-                                    <div key={i} className="match-item">
-                                        <div>
-                                            <span className="match-winner">{match.winner}</span>
-                                            <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                                                won in {match.rounds} rounds
-                                            </span>
+
+                    {status === 'searching' && (
+                        <div className="matchmaking-status">
+                            <p>Searching for an opponent...</p>
+                            <div className="loader"></div>
+                            <button className="btn btn-secondary" onClick={leaveQueue} style={{ marginTop: '1rem' }}>Cancel</button>
+                        </div>
+                    )}
+
+                    {status === 'playing' && gameState && (
+                        <>
+                            {gameState.status === 'finished' ? (
+                                <div className="end-game">
+                                    <h2 className={`end-title ${gameState.winner === (gameState.myCharges >= gameState.opponentCharges ? 'player1' : 'player2') ? 'lose' : 'win'}`}>
+                                        {gameState.winner === 'player1' ? (opponent + ' Wins') : 'You Win'}
+                                    </h2>
+                                    <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
+                                </div>
+                            ) : (
+                                <>
+                                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                                        Playing against <strong style={{ color: 'var(--accent-purple)' }}>{opponent}</strong>
+                                        {gameState.opponentSubmitted && <span> - Waiting for you</span>}
+                                    </p>
+
+                                    <div className="charge-display">
+                                        <div className="charge-block player-charge">
+                                            <div className="charge-label">Your Charges</div>
+                                            <div className="charge-value">{gameState.myCharges}</div>
                                         </div>
-                                        <span className="match-details">{match.p1} vs {match.p2}</span>
+                                        <div className="charge-block opponent-charge">
+                                            <div className="charge-label">{opponent}</div>
+                                            <div className="charge-value">{gameState.opponentCharges}</div>
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p style={{ color: 'var(--text-muted)' }}>No matches recorded yet. Be the first!</p>
-                        )}
-                    </div>
+
+                                    <div className="moves-grid">
+                                        {MOVES.map(move => (
+                                            <button
+                                                key={move.id}
+                                                className="move-btn"
+                                                disabled={loading || !legalMoves.includes(move.id)}
+                                                onClick={() => submitMove(move.id)}
+                                            >
+                                                <span>{move.name}</span>
+                                                <span className="cost">{move.costDisplay}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {history.length > 0 && (
+                                        <div className="history-section">
+                                            <h3 className="history-title">History</h3>
+                                            <div className="history-list">
+                                                {history.map((h, i) => (
+                                                    <div key={i} className="history-item">
+                                                        <span>You: <span className="you">{h.you}</span></span>
+                                                        <span>{opponent}: <span className="opp">{h.opp}</span></span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
                 </div>
             );
         }
 
         function App() {
-            const [page, setPage] = useState("playAI");
+            const [page, setPage] = useState('home');
 
             return (
-                <div className="app-container">
-                    <div className="content-wrapper">
-                        <Header />
-                        
-                        <nav className="nav-container">
-                            <NavButton
-                                icon={NAV_ICONS.playAI}
-                                label="Play vs AI"
-                                isActive={page === "playAI"}
-                                onClick={() => setPage("playAI")}
-                            />
-                            <NavButton
-                                icon={NAV_ICONS.play1v1}
-                                label="1v1 Battle"
-                                isActive={page === "play1v1"}
-                                onClick={() => setPage("play1v1")}
-                            />
-                            <NavButton
-                                icon={NAV_ICONS.stats}
-                                label="Stats"
-                                isActive={page === "stats"}
-                                onClick={() => setPage("stats")}
-                            />
-                        </nav>
-
-                        <main>
-                            {page === "playAI" && <PlayAIPage />}
-                            {page === "play1v1" && <Play1v1Page />}
-                            {page === "stats" && <StatsPage />}
-                        </main>
-                    </div>
+                <div className="app">
+                    {page === 'home' && <HomePage onNavigate={setPage} />}
+                    {page === 'guide' && <GuidePage onNavigate={setPage} />}
+                    {page === 'play-ai' && <PlayAIPage onNavigate={setPage} />}
+                    {page === 'play-1v1' && <Play1v1Page onNavigate={setPage} />}
                 </div>
             );
         }
 
-        // Mount the app
-        try {
-            const root = createRoot(document.getElementById('root'));
-            root.render(<App />);
-        } catch (error) {
-            console.error("Error mounting app:", error);
-            document.getElementById('root').innerHTML = '<div style="color: white; padding: 20px;">Error loading app. Check console.</div>';
-        }
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
+
 </html>
