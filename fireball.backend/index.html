@@ -569,7 +569,7 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        function HomePage({ onNavigate }) {
+        function HomePage({ onNavigate, onlineCount }) {
             const [showAdminModal, setShowAdminModal] = useState(false);
             const [adminPassword, setAdminPassword] = useState('');
             const [isAdmin, setIsAdmin] = useState(false);
@@ -620,6 +620,13 @@
                             <p className="home-card-desc">Real-time matches against other players</p>
                         </div>
                     </div>
+
+                    {onlineCount > 0 && (
+                        <div style={{ marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center' }}>
+                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', marginRight: '8px' }}></span>
+                            {onlineCount} player{onlineCount !== 1 ? 's' : ''} online
+                        </div>
+                    )}
 
                     <button className="admin-trigger" onClick={() => setShowAdminModal(true)}>
                         A
@@ -864,9 +871,8 @@
             );
         }
 
-        function Play1v1Page({ onNavigate }) {
+        function Play1v1Page({ onNavigate, playerId }) {
             const [username, setUsername] = useState('');
-            const [playerId] = useState(() => 'player_' + Math.random().toString(36).substr(2, 9));
             const [status, setStatus] = useState('idle'); // idle, searching, matched, playing
             const [matchId, setMatchId] = useState(null);
             const [opponent, setOpponent] = useState('');
@@ -1107,14 +1113,72 @@
         }
 
         function App() {
-            const [page, setPage] = useState('home');
+            const getPageFromUrl = () => {
+                const path = window.location.pathname;
+                if (path === '/guide') return 'guide';
+                if (path === '/playai') return 'play-ai';
+                if (path === '/online') return 'play-1v1';
+                return 'home';
+            };
+
+            const [page, setPage] = useState(getPageFromUrl());
+            const [onlineCount, setOnlineCount] = useState(0);
+            const [playerId] = useState(() => 'player_' + Math.random().toString(36).substr(2, 9));
+
+            // URL routing
+            const navigate = (newPage) => {
+                const paths = {
+                    'home': '/',
+                    'guide': '/guide',
+                    'play-ai': '/playai',
+                    'play-1v1': '/online'
+                };
+                window.history.pushState({}, '', paths[newPage] || '/');
+                setPage(newPage);
+            };
+
+            // Handle browser back/forward
+            useEffect(() => {
+                const handlePopState = () => {
+                    setPage(getPageFromUrl());
+                };
+                window.addEventListener('popstate', handlePopState);
+                return () => window.removeEventListener('popstate', handlePopState);
+            }, []);
+
+            // Heartbeat for online players tracking
+            useEffect(() => {
+                const sendHeartbeat = async () => {
+                    try {
+                        await fetch('/api/matchmaking', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'heartbeat', playerId })
+                        });
+
+                        const res = await fetch('/api/matchmaking', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'get_online_count' })
+                        });
+                        const data = await res.json();
+                        setOnlineCount(data.count || 0);
+                    } catch (e) {
+                        console.log('Heartbeat error');
+                    }
+                };
+
+                sendHeartbeat();
+                const interval = setInterval(sendHeartbeat, 30000);
+                return () => clearInterval(interval);
+            }, [playerId]);
 
             return (
                 <div className="app">
-                    {page === 'home' && <HomePage onNavigate={setPage} />}
-                    {page === 'guide' && <GuidePage onNavigate={setPage} />}
-                    {page === 'play-ai' && <PlayAIPage onNavigate={setPage} />}
-                    {page === 'play-1v1' && <Play1v1Page onNavigate={setPage} />}
+                    {page === 'home' && <HomePage onNavigate={navigate} onlineCount={onlineCount} />}
+                    {page === 'guide' && <GuidePage onNavigate={navigate} />}
+                    {page === 'play-ai' && <PlayAIPage onNavigate={navigate} />}
+                    {page === 'play-1v1' && <Play1v1Page onNavigate={navigate} playerId={playerId} />}
                 </div>
             );
         }
