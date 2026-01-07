@@ -2,8 +2,6 @@ import random
 import pickle
 from collections import defaultdict
 
-# This is a slimmed-down version of your fireball_ml.py,
-# containing only the classes needed for inference, not training.
 
 class FireballQLearning:
     def __init__(self, epsilon=0.1):
