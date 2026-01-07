@@ -1,13 +1,12 @@
-# Environment variables (contains secrets)
+# env
 .env
 .env.local
 .env*.local
 
-# OS files
+
 .DS_Store
 Thumbs.db
 
-# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,15 +14,13 @@ __pycache__/
 venv/
 .venv/
 
-# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Vercel
 .vercel/
 
-# Firebase service account (never commit)
+#firebase
 *firebase*.json
 *service-account*.json
