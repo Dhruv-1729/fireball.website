@@ -7,7 +7,7 @@
     <title>Fireball</title>
     <meta name="description"
         content="Strategic battle game powered by machine learning. Challenge the AI or play against friends online.">
-    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="icon" type="image/png" href="/fireball_logo.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,7 +61,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
+            padding-top: 12vh;
             gap: 3rem;
         }
 
@@ -124,10 +125,7 @@
             font-size: 0.9375rem;
         }
 
-        .home-card.primary {
-            border-color: var(--fire-orange);
-            background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(234, 88, 12, 0.05));
-        }
+        /* Removed permanent primary styling - all cards look the same now */
 
         /* Admin button */
         .admin-trigger {
@@ -601,7 +599,7 @@
             return (
                 <div className="home-container">
                     <div className="home-header">
-                        <img src="/logo.png" alt="Fireball" className="home-logo" />
+                        <img src="/fireball_logo.png" alt="Fireball" className="home-logo" />
                         <h1 className="home-title">Fireball</h1>
                         <p className="home-subtitle">Strategic battle game powered by machine learning</p>
                     </div>
@@ -612,7 +610,7 @@
                             <p className="home-card-desc">Challenge the Q-learning AI trained on thousands of games</p>
                         </div>
 
-                        <div className="home-card primary" onClick={() => onNavigate('guide')}>
+                        <div className="home-card" onClick={() => onNavigate('guide')}>
                             <h2 className="home-card-title">How to Play</h2>
                             <p className="home-card-desc">Learn the rules and master the strategy</p>
                         </div>
@@ -687,7 +685,7 @@
             return (
                 <div className="guide-container">
                     <div className="game-header">
-                        <img src="/logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" />
                         <h1 className="game-title">How to Play</h1>
                         <button className="back-btn" onClick={() => onNavigate('home')}>Back to Menu</button>
                     </div>
@@ -801,7 +799,7 @@
             return (
                 <div className="game-container">
                     <div className="game-header">
-                        <img src="/logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" />
                         <h1 className="game-title">vs ML Model</h1>
                         <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
                     </div>
@@ -1017,7 +1015,7 @@
             return (
                 <div className="game-container">
                     <div className="game-header">
-                        <img src="/logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" />
                         <h1 className="game-title">Play Online</h1>
                         <button className="back-btn" onClick={() => { leaveQueue(); onNavigate('home'); }}>Back</button>
                     </div>
