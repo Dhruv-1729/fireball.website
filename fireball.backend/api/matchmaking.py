@@ -167,6 +167,8 @@ class handler(BaseHTTPRequestHandler):
                     'player2_charges': 0,
                     'player1_move': None,
                     'player2_move': None,
+                    'player1_moves': [],
+                    'player2_moves': [],
                     'turn': 1,
                     'status': 'active',
                     'winner': None,
@@ -256,11 +258,17 @@ class handler(BaseHTTPRequestHandler):
 
         winner = determine_winner(p1_move, p2_move)
 
+        # Append moves to history
+        p1_moves_history = match.get('player1_moves', []) + [p1_move]
+        p2_moves_history = match.get('player2_moves', []) + [p2_move]
+
         update_data = {
             'player1_charges': p1_charges,
             'player2_charges': p2_charges,
             'player1_move': None,
             'player2_move': None,
+            'player1_moves': p1_moves_history,
+            'player2_moves': p2_moves_history,
             'turn': match['turn'] + 1,
             'last_p1_move': p1_move,
             'last_p2_move': p2_move,

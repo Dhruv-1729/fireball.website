@@ -569,33 +569,7 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        function HomePage({ onNavigate, onlineCount }) {
-            const [showAdminModal, setShowAdminModal] = useState(false);
-            const [adminPassword, setAdminPassword] = useState('');
-            const [isAdmin, setIsAdmin] = useState(false);
-            const [stats, setStats] = useState(null);
-
-            const handleAdminLogin = async () => {
-                const hash = await sha256(adminPassword);
-                if (hash === ADMIN_HASH) {
-                    setIsAdmin(true);
-                    fetchStats();
-                } else {
-                    alert('Incorrect password');
-                }
-                setAdminPassword('');
-            };
-
-            const fetchStats = async () => {
-                try {
-                    const res = await fetch('/api/stats');
-                    const data = await res.json();
-                    setStats(data);
-                } catch (e) {
-                    setStats({ error: 'Failed to load stats' });
-                }
-            };
-
+        function HomePage({ onNavigate }) {
             return (
                 <div className="home-container">
                     <div className="home-header">
@@ -621,68 +595,198 @@
                         </div>
                     </div>
 
-                    {onlineCount > 0 && (
-                        <div style={{ marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center' }}>
-                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', marginRight: '8px' }}></span>
-                            {onlineCount} player{onlineCount !== 1 ? 's' : ''} online
-                        </div>
-                    )}
-
-                    <button className="admin-trigger" onClick={() => setShowAdminModal(true)}>
+                    <button className="admin-trigger" onClick={() => onNavigate('admin')}>
                         A
                     </button>
+                </div>
+            );
+        }
 
-                    {showAdminModal && (
-                        <div className="modal-overlay" onClick={() => { setShowAdminModal(false); setIsAdmin(false); }}>
-                            <div className="modal" onClick={e => e.stopPropagation()}>
-                                {!isAdmin ? (
-                                    <>
-                                        <h3>Admin Access</h3>
-                                        <input
-                                            type="password"
-                                            className="input-field"
-                                            placeholder="Password"
-                                            value={adminPassword}
-                                            onChange={e => setAdminPassword(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
-                                        />
-                                        <button className="btn btn-primary" onClick={handleAdminLogin}>
-                                            Login
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <h3>Statistics</h3>
-                                        {stats ? (
-                                            stats.error ? (
-                                                <p style={{ color: 'var(--text-secondary)' }}>{stats.error}</p>
-                                            ) : (
-                                                <>
-                                                    <div className="stat-row">
-                                                        <span className="stat-label">Unique Visitors</span>
-                                                        <span className="stat-value">{stats.uniqueVisitors || 0}</span>
-                                                    </div>
-                                                    <div className="stat-row">
-                                                        <span className="stat-label">AI Win Rate</span>
-                                                        <span className="stat-value">{stats.aiWinRate || 0}%</span>
-                                                    </div>
-                                                    <div className="stat-row">
-                                                        <span className="stat-label">Total AI Games</span>
-                                                        <span className="stat-value">{stats.aiGames || 0}</span>
-                                                    </div>
-                                                    <div className="stat-row">
-                                                        <span className="stat-label">Avg Match Length</span>
-                                                        <span className="stat-value">{stats.avgMatchLength || 0} rounds</span>
-                                                    </div>
-                                                </>
-                                            )
-                                        ) : (
-                                            <div className="loader"></div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
+        function AdminPage({ onNavigate }) {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [password, setPassword] = useState('');
+            const [stats, setStats] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [activeTab, setActiveTab] = useState('overview');
+
+            const handleLogin = async () => {
+                const hash = await sha256(password);
+                if (hash === ADMIN_HASH) {
+                    setIsAuthenticated(true);
+                    fetchStats();
+                } else {
+                    alert('Incorrect password');
+                }
+                setPassword('');
+            };
+
+            const fetchStats = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/stats');
+                    const data = await res.json();
+                    setStats(data);
+                } catch (e) {
+                    setStats({ error: 'Failed to load stats' });
+                }
+                setLoading(false);
+            };
+
+            if (!isAuthenticated) {
+                return (
+                    <div className="game-container">
+                        <div className="game-header">
+                            <img src="/fireball_logo.png" alt="" className="game-logo" />
+                            <h1 className="game-title">Admin Panel</h1>
+                            <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
                         </div>
+                        <div className="matchmaking-status">
+                            <p>Enter admin password to continue</p>
+                            <input
+                                type="password"
+                                className="input-field"
+                                placeholder="Password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                            />
+                            <br />
+                            <button className="btn btn-primary" onClick={handleLogin}>Login</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="game-container" style={{ maxWidth: '1200px' }}>
+                    <div className="game-header">
+                        <img src="/fireball_logo.png" alt="" className="game-logo" />
+                        <h1 className="game-title">Admin Dashboard</h1>
+                        <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
+                    </div>
+
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: '3rem' }}>
+                            <div className="loader"></div>
+                        </div>
+                    ) : stats && !stats.error ? (
+                        <>
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+                                <button
+                                    className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setActiveTab('overview')}
+                                >Overview</button>
+                                <button
+                                    className={`btn ${activeTab === 'ai-games' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setActiveTab('ai-games')}
+                                >AI Games ({stats.aiGames || 0})</button>
+                                <button
+                                    className={`btn ${activeTab === 'online-games' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setActiveTab('online-games')}
+                                >Online Games ({stats.totalOnlineGames || 0})</button>
+                            </div>
+
+                            {activeTab === 'overview' && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                    <div className="home-card" style={{ cursor: 'default' }}>
+                                        <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
+                                        <p className="home-card-desc">Unique Visitors</p>
+                                    </div>
+                                    <div className="home-card" style={{ cursor: 'default' }}>
+                                        <h2 className="home-card-title">{stats.aiWinRate || 0}%</h2>
+                                        <p className="home-card-desc">AI Win Rate</p>
+                                    </div>
+                                    <div className="home-card" style={{ cursor: 'default' }}>
+                                        <h2 className="home-card-title">{stats.aiGames || 0}</h2>
+                                        <p className="home-card-desc">Total AI Games</p>
+                                    </div>
+                                    <div className="home-card" style={{ cursor: 'default' }}>
+                                        <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
+                                        <p className="home-card-desc">Avg Rounds/Game</p>
+                                    </div>
+                                    <div className="home-card" style={{ cursor: 'default' }}>
+                                        <h2 className="home-card-title">{stats.totalOnlineGames || 0}</h2>
+                                        <p className="home-card-desc">Online Games</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'ai-games' && (
+                                <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Outcome</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>AI Moves</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {stats.aiGamesList && stats.aiGamesList.map((game, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === 'ai' ? 'var(--fire-red)' : '#22c55e' }}>
+                                                        {game.winner === 'ai' ? 'AI Won' : 'Human Won'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.playerMoves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.aiMoves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {(!stats.aiGamesList || stats.aiGamesList.length === 0) && (
+                                                <tr><td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {activeTab === 'online-games' && (
+                                <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 1</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 2</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Winner</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P1 Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P2 Moves</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {stats.onlineGamesList && stats.onlineGamesList.map((game, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player1 ? '#22c55e' : 'inherit' }}>{game.player1}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player2 ? '#22c55e' : 'inherit' }}>{game.player2}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: '#22c55e' }}>{game.winner}</td>
+                                                    <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.player1Moves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.player2Moves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {(!stats.onlineGamesList || stats.onlineGamesList.length === 0) && (
+                                                <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{stats?.error || 'Error loading stats'}</p>
                     )}
                 </div>
             );
@@ -1114,12 +1218,22 @@
                 if (path === '/guide') return 'guide';
                 if (path === '/playai') return 'play-ai';
                 if (path === '/online') return 'play-1v1';
+                if (path === '/admin') return 'admin';
                 return 'home';
             };
 
             const [page, setPage] = useState(getPageFromUrl());
             const [onlineCount, setOnlineCount] = useState(0);
-            const [playerId] = useState(() => 'player_' + Math.random().toString(36).substr(2, 9));
+
+            // Use localStorage for persistent playerId (prevents refresh spoofing)
+            const [playerId] = useState(() => {
+                let id = localStorage.getItem('fireball_player_id');
+                if (!id) {
+                    id = 'player_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                    localStorage.setItem('fireball_player_id', id);
+                }
+                return id;
+            });
 
             // URL routing
             const navigate = (newPage) => {
@@ -1127,7 +1241,8 @@
                     'home': '/',
                     'guide': '/guide',
                     'play-ai': '/playai',
-                    'play-1v1': '/online'
+                    'play-1v1': '/online',
+                    'admin': '/admin'
                 };
                 window.history.pushState({}, '', paths[newPage] || '/');
                 setPage(newPage);
@@ -1142,8 +1257,10 @@
                 return () => window.removeEventListener('popstate', handlePopState);
             }, []);
 
-            // Heartbeat for online players tracking
+            // Heartbeat for online players tracking (only on play-1v1 page)
             useEffect(() => {
+                if (page !== 'play-1v1') return;
+
                 const sendHeartbeat = async () => {
                     try {
                         await fetch('/api/matchmaking', {
@@ -1167,14 +1284,15 @@
                 sendHeartbeat();
                 const interval = setInterval(sendHeartbeat, 30000);
                 return () => clearInterval(interval);
-            }, [playerId]);
+            }, [playerId, page]);
 
             return (
                 <div className="app">
-                    {page === 'home' && <HomePage onNavigate={navigate} onlineCount={onlineCount} />}
+                    {page === 'home' && <HomePage onNavigate={navigate} />}
                     {page === 'guide' && <GuidePage onNavigate={navigate} />}
                     {page === 'play-ai' && <PlayAIPage onNavigate={navigate} />}
-                    {page === 'play-1v1' && <Play1v1Page onNavigate={navigate} playerId={playerId} />}
+                    {page === 'play-1v1' && <Play1v1Page onNavigate={navigate} playerId={playerId} onlineCount={onlineCount} />}
+                    {page === 'admin' && <AdminPage onNavigate={navigate} />}
                 </div>
             );
         }
