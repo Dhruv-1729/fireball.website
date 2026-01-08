@@ -322,19 +322,57 @@
         }
 
         /* End game */
+        .end-game-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid;
+            border-radius: 16px;
+            padding: 3rem 4rem;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            animation: slideDown 0.4s ease;
+        }
+
+        .end-game-overlay.win {
+            border-color: var(--fire-orange);
+        }
+
+        .end-game-overlay.lose {
+            border-color: var(--text-muted);
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translate(-50%, -60%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translate(-50%, -50%);
+                opacity: 1;
+            }
+        }
+
         .end-game {
             text-align: center;
             padding: 3rem 2rem;
         }
 
         .end-title {
-            font-size: 2.5rem;
+            font-size: 3rem;
             font-weight: 800;
             margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
 
         .end-title.win {
             color: var(--fire-orange);
+            text-shadow: 0 0 30px rgba(234, 88, 12, 0.5);
         }
 
         .end-title.lose {
@@ -774,6 +812,7 @@
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [password, setPassword] = useState('');
             const [stats, setStats] = useState(null);
+            const [mlStatus, setMlStatus] = useState(null);
             const [loading, setLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('overview');
 
@@ -782,6 +821,7 @@
                 if (hash === ADMIN_HASH) {
                     setIsAuthenticated(true);
                     fetchStats();
+                    fetchMlStatus();
                 } else {
                     alert('Incorrect password');
                 }
@@ -798,6 +838,31 @@
                     setStats({ error: 'Failed to load stats' });
                 }
                 setLoading(false);
+            };
+
+            const fetchMlStatus = async () => {
+                try {
+                    const res = await fetch('/api/ml_manage');
+                    const data = await res.json();
+                    setMlStatus(data);
+                } catch (e) {
+                    console.log('ML status not available');
+                }
+            };
+
+            const uploadOriginalModel = async () => {
+                try {
+                    const res = await fetch('/api/ml_manage', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'upload_original' })
+                    });
+                    const data = await res.json();
+                    alert(data.message || 'Done');
+                    fetchMlStatus();
+                } catch (e) {
+                    alert('Failed to upload model');
+                }
             };
 
             if (!isAuthenticated) {
@@ -852,7 +917,84 @@
                                     className={`btn ${activeTab === 'online-games' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('online-games')}
                                 >Online Games ({stats.totalOnlineGames || 0})</button>
+                                <button
+                                    className={`btn ${activeTab === 'ml-status' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => { setActiveTab('ml-status'); fetchMlStatus(); }}
+                                >ML Status</button>
                             </div>
+
+                            {activeTab === 'ml-status' && (
+                                <div style={{ display: 'grid', gap: '1.5rem' }}>
+                                    <div className="home-card" style={{ cursor: 'default', padding: '1.5rem' }}>
+                                        <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>🤖 ML Training System</h3>
+                                        {mlStatus ? (
+                                            <div style={{ display: 'grid', gap: '0.75rem', fontSize: '0.9rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Training Enabled:</span>
+                                                    <span style={{ color: mlStatus.master_switch ? 'var(--success-green)' : 'var(--text-muted)' }}>
+                                                        {mlStatus.master_switch ? '✓ Yes' : '✗ No (disabled in code)'}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Current Model:</span>
+                                                    <span>{mlStatus.config?.current_model || 'None (using local model.pkl)'}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Games Since Last Training:</span>
+                                                    <span>{mlStatus.config?.games_since_last_training || 0} / {mlStatus.config?.games_threshold || 200}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>A/B Test Active:</span>
+                                                    <span style={{ color: mlStatus.config?.ab_test_active ? 'var(--fire-orange)' : 'var(--text-muted)' }}>
+                                                        {mlStatus.config?.ab_test_active ? '✓ Yes' : '✗ No'}
+                                                    </span>
+                                                </div>
+                                                {mlStatus.config?.ab_test_active && (
+                                                    <>
+                                                        <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                                                            <h4 style={{ marginBottom: '0.5rem' }}>A/B Test Progress</h4>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                                <div>
+                                                                    <strong>Model A (Current)</strong><br />
+                                                                    Games: {mlStatus.ab_test?.model_a_games || 0} / {mlStatus.config?.ab_test_games_required || 15}<br />
+                                                                    Wins: {mlStatus.ab_test?.model_a_wins || 0}
+                                                                    {mlStatus.ab_test?.model_a_games > 0 && (
+                                                                        <> ({Math.round(mlStatus.ab_test.model_a_wins / mlStatus.ab_test.model_a_games * 100)}%)</>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Model B (Challenger)</strong><br />
+                                                                    Games: {mlStatus.ab_test?.model_b_games || 0} / {mlStatus.config?.ab_test_games_required || 15}<br />
+                                                                    Wins: {mlStatus.ab_test?.model_b_wins || 0}
+                                                                    {mlStatus.ab_test?.model_b_games > 0 && (
+                                                                        <> ({Math.round(mlStatus.ab_test.model_b_wins / mlStatus.ab_test.model_b_games * 100)}%)</>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                                <div style={{ marginTop: '1rem' }}>
+                                                    <h4>Training Data Available:</h4>
+                                                    <ul style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
+                                                        <li>AI vs Human Games: {mlStatus.training_data?.ai_vs_human_games || 0}</li>
+                                                        <li>AI Win Rate: {mlStatus.training_data?.ai_win_rate || 0}%</li>
+                                                        <li>Online Games: {mlStatus.training_data?.online_games || 0}</li>
+                                                        <li>Total: {mlStatus.training_data?.total_games || 0}</li>
+                                                    </ul>
+                                                </div>
+                                                {!mlStatus.config?.current_model && (
+                                                    <button className="btn btn-primary" onClick={uploadOriginalModel} style={{ marginTop: '1rem' }}>
+                                                        Upload Original Model to Firebase
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p style={{ color: 'var(--text-muted)' }}>ML status not available. The /api/ml_manage endpoint may not be deployed.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {activeTab === 'overview' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
@@ -1406,14 +1548,7 @@
 
                     {status === 'playing' && gameState && (
                         <>
-                            {gameState.status === 'finished' ? (
-                                <div className="end-game">
-                                    <h2 className={`end-title ${gameState.winner === (gameState.myCharges >= gameState.opponentCharges ? 'player1' : 'player2') ? 'lose' : 'win'}`}>
-                                        {gameState.winner === 'player1' ? (opponent + ' Wins') : 'You Win'}
-                                    </h2>
-                                    <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
-                                </div>
-                            ) : (
+                            {
                                 <>
                                     <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                                         Playing against <strong style={{ color: 'var(--accent-purple)' }}>{opponent}</strong>
@@ -1435,12 +1570,13 @@
                                         {MOVES.map(move => {
                                             const isSelected = selectedMove === move.id;
                                             const isFaded = myMoveSubmitted && !isSelected;
+                                            const isFinished = gameState.status === 'finished';
 
                                             return (
                                                 <button
                                                     key={move.id}
-                                                    className={`move-btn ${isSelected ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
-                                                    disabled={loading || !legalMoves.includes(move.id) || myMoveSubmitted}
+                                                    className={`move-btn ${isSelected ? 'selected' : ''} ${isFaded || isFinished ? 'faded' : ''}`}
+                                                    disabled={loading || !legalMoves.includes(move.id) || myMoveSubmitted || isFinished}
                                                     onClick={() => submitMove(move.id)}
                                                 >
                                                     <span>{move.name}</span>
@@ -1475,8 +1611,16 @@
                                             </div>
                                         </div>
                                     )}
+
+                                    {gameState.status === 'finished' && (
+                                        <div className={`end-game-overlay ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                            <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                                {gameState.didIWin ? 'You Win!' : 'You Lose'}
+                                            </h2>
+                                            <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
+                                        </div>
+                                    )}
                                 </>
-                            )}
                         </>
                     )}
                 </div>

@@ -2,6 +2,7 @@ import json
 import os
 import random
 import pickle
+import base64
 from collections import defaultdict
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -50,6 +51,11 @@ class FireballQLearning:
         except Exception:
             return False
 
+    def load_from_bytes(self, data):
+        """Load model from bytes (for Firebase models)."""
+        loaded = pickle.loads(data)
+        self.q_table = defaultdict(lambda: defaultdict(float), loaded)
+
 
 class FireballGame:
     def __init__(self):
@@ -95,10 +101,199 @@ try:
 except:
     db = None
 
-# Load the AI Model
+# ============ MODEL LOADING ============
+
+# Default: Load from local file
 ai_player = FireballQLearning(epsilon=0)
 model_path = os.path.join(os.path.dirname(__file__), '..', 'model.pkl')
 model_loaded = ai_player.load_model(model_path)
+
+# A/B Testing thresholds
+AB_TEST_GAMES_REQUIRED = 15
+
+
+def get_ml_config():
+    """Get ML configuration from Firebase."""
+    if not db:
+        return None
+    try:
+        config_ref = db.collection('ml_config').document('main')
+        doc = config_ref.get()
+        return doc.to_dict() if doc.exists else None
+    except Exception as e:
+        print(f"Error getting ML config: {e}")
+        return None
+
+
+def update_ml_config(updates):
+    """Update ML configuration in Firebase."""
+    if not db:
+        return False
+    try:
+        config_ref = db.collection('ml_config').document('main')
+        config_ref.update(updates)
+        return True
+    except Exception as e:
+        print(f"Error updating ML config: {e}")
+        return False
+
+
+def load_model_from_firebase(version_name):
+    """Load a model from Firebase."""
+    if not db or not version_name:
+        return None
+    try:
+        doc = db.collection('ml_models').document(version_name).get()
+        if not doc.exists:
+            return None
+        data = doc.to_dict()
+        model_b64 = data.get('model_data')
+        if not model_b64:
+            return None
+        model_bytes = base64.b64decode(model_b64)
+        model = FireballQLearning(epsilon=0)
+        model.load_from_bytes(model_bytes)
+        return model
+    except Exception as e:
+        print(f"Error loading model from Firebase: {e}")
+        return None
+
+
+def get_model_for_game():
+    """
+    Get the appropriate model for a game, handling A/B testing.
+    Returns (model, model_id, version_name) tuple.
+    model_id is 'A' (current) or 'B' (challenger) for tracking.
+    Falls back to local model.pkl if Firebase models not available.
+    """
+    config = get_ml_config()
+    
+    # If no config, use local model
+    if not config:
+        return ai_player if model_loaded else None, 'A', 'local'
+    
+    # If A/B test is not active, use current model
+    if not config.get('ab_test_active') or not config.get('challenger_model_version'):
+        current_version = config.get('current_model_version')
+        if current_version:
+            model = load_model_from_firebase(current_version)
+            if model:
+                return model, 'A', current_version
+        # Fallback to local
+        return ai_player if model_loaded else None, 'A', 'local'
+    
+    # A/B test is active - randomly assign
+    if random.random() < 0.5:
+        model = load_model_from_firebase(config.get('current_model_version'))
+        if model:
+            return model, 'A', config.get('current_model_version')
+        return ai_player if model_loaded else None, 'A', 'local'
+    else:
+        model = load_model_from_firebase(config.get('challenger_model_version'))
+        if model:
+            return model, 'B', config.get('challenger_model_version')
+        # Fallback to current if challenger fails
+        model = load_model_from_firebase(config.get('current_model_version'))
+        if model:
+            return model, 'A', config.get('current_model_version')
+        return ai_player if model_loaded else None, 'A', 'local'
+
+
+def delete_model_from_firebase(version_name):
+    """Delete a model from Firebase."""
+    if not db or not version_name:
+        return False
+    try:
+        db.collection('ml_models').document(version_name).delete()
+        return True
+    except:
+        return False
+
+
+def record_game_result_and_check_ab(model_id, ai_won, config):
+    """
+    Record the result of a game for A/B testing and check if test should conclude.
+    Returns updated config status.
+    """
+    if not config or not config.get('ab_test_active'):
+        # Just increment game count
+        update_ml_config({
+            'games_since_last_training': (config.get('games_since_last_training', 0) if config else 0) + 1
+        })
+        return
+    
+    updates = {
+        'games_since_last_training': config.get('games_since_last_training', 0) + 1
+    }
+    
+    if model_id == 'A':
+        updates['model_a_games'] = config.get('model_a_games', 0) + 1
+        if ai_won:
+            updates['model_a_wins'] = config.get('model_a_wins', 0) + 1
+    elif model_id == 'B':
+        updates['model_b_games'] = config.get('model_b_games', 0) + 1
+        if ai_won:
+            updates['model_b_wins'] = config.get('model_b_wins', 0) + 1
+    
+    update_ml_config(updates)
+    
+    # Check if A/B test should conclude
+    a_games = (config.get('model_a_games', 0) + (1 if model_id == 'A' else 0))
+    b_games = (config.get('model_b_games', 0) + (1 if model_id == 'B' else 0))
+    
+    if a_games >= AB_TEST_GAMES_REQUIRED and b_games >= AB_TEST_GAMES_REQUIRED:
+        conclude_ab_test(config, model_id, ai_won)
+
+
+def conclude_ab_test(config, last_model_id, last_ai_won):
+    """Conclude A/B test and promote winner."""
+    # Re-fetch config to get latest values
+    config = get_ml_config()
+    if not config:
+        return
+    
+    a_games = config.get('model_a_games', 0)
+    a_wins = config.get('model_a_wins', 0)
+    b_games = config.get('model_b_games', 0)
+    b_wins = config.get('model_b_wins', 0)
+    
+    a_winrate = a_wins / a_games if a_games > 0 else 0
+    b_winrate = b_wins / b_games if b_games > 0 else 0
+    
+    print(f"A/B Test Complete - A: {a_wins}/{a_games} ({a_winrate*100:.1f}%), B: {b_wins}/{b_games} ({b_winrate*100:.1f}%)")
+    
+    current_version = config.get('current_model_version')
+    challenger_version = config.get('challenger_model_version')
+    
+    if b_winrate > a_winrate:
+        # Challenger wins - promote it
+        print(f"Challenger wins! Promoting {challenger_version}")
+        if current_version and current_version != 'v1_original':
+            delete_model_from_firebase(current_version)
+        
+        update_ml_config({
+            'current_model_version': challenger_version,
+            'challenger_model_version': None,
+            'ab_test_active': False,
+            'model_a_games': 0,
+            'model_a_wins': 0,
+            'model_b_games': 0,
+            'model_b_wins': 0
+        })
+    else:
+        # Current model wins
+        print(f"Current model wins! Keeping {current_version}")
+        if challenger_version:
+            delete_model_from_firebase(challenger_version)
+        
+        update_ml_config({
+            'challenger_model_version': None,
+            'ab_test_active': False,
+            'model_a_games': 0,
+            'model_a_wins': 0,
+            'model_b_games': 0,
+            'model_b_wins': 0
+        })
 
 
 class handler(BaseHTTPRequestHandler):
@@ -110,14 +305,6 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if not model_loaded:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": "AI model not found."}).encode())
-            return
-
         try:
             content_len = int(self.headers.get('Content-Length'))
             post_body = self.rfile.read(content_len)
@@ -125,16 +312,28 @@ class handler(BaseHTTPRequestHandler):
 
             player_move = data.get('playerMove')
 
+            # Get model for this game (handles A/B testing)
+            model, model_id, model_version = get_model_for_game()
+            
+            if not model:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "AI model not found."}).encode())
+                return
+
             game = FireballGame()
             game.player_charges = int(data.get('playerCharges', 0))
             game.comp_charges = int(data.get('aiCharges', 0))
 
-            ai_player.move_history = data.get('oppMoveHistory', [])
-            ai_player.opp_move_history = data.get('moveHistory', [])
+            # Restore move history
+            model.move_history = data.get('oppMoveHistory', [])
+            model.opp_move_history = data.get('moveHistory', [])
 
-            ai_legal_moves = ai_player.get_legal_moves(game.comp_charges)
-            ai_state = ai_player.get_state(game.comp_charges, game.player_charges)
-            ai_move = ai_player.choose_action(ai_state, ai_legal_moves, training=False)
+            ai_legal_moves = model.get_legal_moves(game.comp_charges)
+            ai_state = model.get_state(game.comp_charges, game.player_charges)
+            ai_move = model.choose_action(ai_state, ai_legal_moves, training=False)
 
             result = game.execute_turn(player_move, ai_move)
 
@@ -151,17 +350,28 @@ class handler(BaseHTTPRequestHandler):
                         'ai_move': ai_move,
                         'result': result,
                         'turn_number': len(move_history),
+                        'model_id': model_id,
+                        'model_version': model_version,
                         'timestamp': firestore.SERVER_TIMESTAMP
                     })
 
                     if game.game_over:
+                        ai_won = game.winner == 'player2'
+                        
                         db.collection('ai_vs_human_matches').add({
-                            'winner': 'ai' if game.winner == 'player2' else 'human',
+                            'winner': 'ai' if ai_won else 'human',
                             'turns': len(move_history),
                             'player_moves': move_history,
                             'ai_moves': ai_history,
+                            'model_id': model_id,
+                            'model_version': model_version,
                             'timestamp': firestore.SERVER_TIMESTAMP
                         })
+                        
+                        # Record for A/B testing
+                        config = get_ml_config()
+                        record_game_result_and_check_ab(model_id, ai_won, config)
+                        
                 except Exception as log_err:
                     print(f"Logging error: {log_err}")
 
@@ -171,7 +381,8 @@ class handler(BaseHTTPRequestHandler):
                 "aiMove": ai_move,
                 "result": result,
                 "gameOver": game.game_over,
-                "winner": game.winner
+                "winner": game.winner,
+                "modelId": model_id  # Optional: for debugging which model was used
             }
 
             self.send_response(200)

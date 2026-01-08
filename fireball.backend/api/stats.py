@@ -80,39 +80,93 @@ class handler(BaseHTTPRequestHandler):
             # Get Online/1v1 Games with full details
             online_games = []
             try:
-                # First try with finished_at ordering
+                # Try multiple query strategies
+                matches_1v1_ref = None
+                query_error = None
+                
+                # Strategy 1: Try with finished_at ordering
                 try:
                     matches_1v1_ref = db.collection("matches").where("status", "==", "finished").order_by("finished_at", direction=firestore.Query.DESCENDING).limit(100).stream()
-                except:
-                    # Fallback to created_at if finished_at doesn't exist or isn't indexed
-                    matches_1v1_ref = db.collection("matches").where("status", "==", "finished").limit(100).stream()
-
-                for doc in matches_1v1_ref:
-                    match = doc.to_dict()
-                    
-                    # Try to get finished_at, fallback to created_at
-                    timestamp = match.get('finished_at') or match.get('created_at')
-                    ts_str = ''
-                    if timestamp:
+                    # Try to get first result to see if query works
+                    first_doc = next(matches_1v1_ref, None)
+                    if first_doc:
+                        # Reset iterator and process
+                        matches_1v1_ref = db.collection("matches").where("status", "==", "finished").order_by("finished_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+                    else:
+                        print("finished_at query returned no results")
+                        matches_1v1_ref = None
+                except Exception as e1:
+                    query_error = str(e1)
+                    print(f"finished_at query failed: {e1}")
+                    matches_1v1_ref = None
+                
+                # Strategy 2: Fallback to just status filter, no ordering
+                if not matches_1v1_ref:
+                    try:
+                        matches_1v1_ref = db.collection("matches").where("status", "==", "finished").limit(100).stream()
+                        print(f"Using fallback query (status only). Previous error: {query_error}")
+                    except Exception as e2:
+                        print(f"Fallback query also failed: {e2}")
+                        # Strategy 3: Last resort - get ALL matches and filter in Python
                         try:
-                            ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
-                        except:
-                            ts_str = str(timestamp)
-                    
-                    winner_name = match.get('player1_username') if match.get('winner') == 'player1' else match.get('player2_username', 'Unknown')
-                    
-                    online_games.append({
-                        'id': doc.id,
-                        'player1': match.get('player1_username', 'P1'),
-                        'player2': match.get('player2_username', 'P2'),
-                        'winner': winner_name,
-                        'turns': match.get('turn', 1),
-                        'timestamp': ts_str,
-                        'player1Moves': match.get('player1_moves', []),
-                        'player2Moves': match.get('player2_moves', [])
-                    })
+                            all_matches = db.collection("matches").limit(200).stream()
+                            for doc in all_matches:
+                                match = doc.to_dict()
+                                if match.get('status') == 'finished':
+                                    timestamp = match.get('finished_at') or match.get('created_at')
+                                    ts_str = ''
+                                    if timestamp:
+                                        try:
+                                            ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
+                                        except:
+                                            ts_str = str(timestamp)
+                                    
+                                    winner_name = match.get('player1_username') if match.get('winner') == 'player1' else match.get('player2_username', 'Unknown')
+                                    
+                                    online_games.append({
+                                        'id': doc.id,
+                                        'player1': match.get('player1_username', 'P1'),
+                                        'player2': match.get('player2_username', 'P2'),
+                                        'winner': winner_name,
+                                        'turns': match.get('turn', 1),
+                                        'timestamp': ts_str,
+                                        'player1Moves': match.get('player1_moves', []),
+                                        'player2Moves': match.get('player2_moves', [])
+                                    })
+                            print(f"Last resort query found {len(online_games)} finished matches")
+                        except Exception as e3:
+                            print(f"Even last resort failed: {e3}")
+                
+                # Process results from Strategy 1 or 2
+                if matches_1v1_ref and len(online_games) == 0:
+                    for doc in matches_1v1_ref:
+                        match = doc.to_dict()
+                        
+                        # Try to get finished_at, fallback to created_at
+                        timestamp = match.get('finished_at') or match.get('created_at')
+                        ts_str = ''
+                        if timestamp:
+                            try:
+                                ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
+                            except:
+                                ts_str = str(timestamp)
+                        
+                        winner_name = match.get('player1_username') if match.get('winner') == 'player1' else match.get('player2_username', 'Unknown')
+                        
+                        online_games.append({
+                            'id': doc.id,
+                            'player1': match.get('player1_username', 'P1'),
+                            'player2': match.get('player2_username', 'P2'),
+                            'winner': winner_name,
+                            'turns': match.get('turn', 1),
+                            'timestamp': ts_str,
+                            'player1Moves': match.get('player1_moves', []),
+                            'player2Moves': match.get('player2_moves', [])
+                        })
+                
+                print(f"Total online games found: {len(online_games)}")
             except Exception as e:
-                print(f"Online games error: {e}")
+                print(f"Online games outer error: {e}")
 
             stats = {
                 "uniqueVisitors": unique_visitor_count,
