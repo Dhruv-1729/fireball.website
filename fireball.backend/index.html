@@ -1225,12 +1225,13 @@
             const [page, setPage] = useState(getPageFromUrl());
             const [onlineCount, setOnlineCount] = useState(0);
 
-            // Use localStorage for persistent playerId (prevents refresh spoofing)
+            // Use sessionStorage for per-tab playerId (allows testing matchmaking in multiple tabs)
+            // Each tab gets a unique session ID for matchmaking purposes
             const [playerId] = useState(() => {
-                let id = localStorage.getItem('fireball_player_id');
+                let id = sessionStorage.getItem('fireball_session_id');
                 if (!id) {
                     id = 'player_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-                    localStorage.setItem('fireball_player_id', id);
+                    sessionStorage.setItem('fireball_session_id', id);
                 }
                 return id;
             });
