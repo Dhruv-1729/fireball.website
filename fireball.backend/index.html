@@ -1548,79 +1548,76 @@
 
                     {status === 'playing' && gameState && (
                         <>
-                            {
-                                <>
-                                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                                        Playing against <strong style={{ color: 'var(--accent-purple)' }}>{opponent}</strong>
-                                        {gameState.opponentSubmitted && !myMoveSubmitted && <span> - Waiting for you</span>}
-                                    </p>
+                            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                                Playing against <strong style={{ color: 'var(--accent-purple)' }}>{opponent}</strong>
+                                {gameState.opponentSubmitted && !myMoveSubmitted && <span> - Waiting for you</span>}
+                            </p>
 
-                                    <div className="charge-display">
-                                        <div className="charge-block player-charge">
-                                            <div className="charge-label">Your Charges</div>
-                                            <div className="charge-value">{gameState.myCharges}</div>
-                                        </div>
-                                        <div className="charge-block opponent-charge">
-                                            <div className="charge-label">{opponent}</div>
-                                            <div className="charge-value">{gameState.opponentCharges}</div>
-                                        </div>
+                            <div className="charge-display">
+                                <div className="charge-block player-charge">
+                                    <div className="charge-label">Your Charges</div>
+                                    <div className="charge-value">{gameState.myCharges}</div>
+                                </div>
+                                <div className="charge-block opponent-charge">
+                                    <div className="charge-label">{opponent}</div>
+                                    <div className="charge-value">{gameState.opponentCharges}</div>
+                                </div>
+                            </div>
+
+                            <div className="moves-grid">
+                                {MOVES.map(move => {
+                                    const isSelected = selectedMove === move.id;
+                                    const isFaded = myMoveSubmitted && !isSelected;
+                                    const isFinished = gameState.status === 'finished';
+
+                                    return (
+                                        <button
+                                            key={move.id}
+                                            className={`move-btn ${isSelected ? 'selected' : ''} ${isFaded || isFinished ? 'faded' : ''}`}
+                                            disabled={loading || !legalMoves.includes(move.id) || myMoveSubmitted || isFinished}
+                                            onClick={() => submitMove(move.id)}
+                                        >
+                                            <span>{move.name}</span>
+                                            <span className="cost">{move.costDisplay}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {waitingForOpponent && (
+                                <div className="waiting-overlay" style={{ marginTop: '2rem', border: 'none', background: 'transparent', padding: '0' }}>
+                                    <div className="waiting-dots">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
                                     </div>
+                                    <p className="waiting-text">Waiting for {opponent} to make a move...</p>
+                                </div>
+                            )}
 
-                                    <div className="moves-grid">
-                                        {MOVES.map(move => {
-                                            const isSelected = selectedMove === move.id;
-                                            const isFaded = myMoveSubmitted && !isSelected;
-                                            const isFinished = gameState.status === 'finished';
-
-                                            return (
-                                                <button
-                                                    key={move.id}
-                                                    className={`move-btn ${isSelected ? 'selected' : ''} ${isFaded || isFinished ? 'faded' : ''}`}
-                                                    disabled={loading || !legalMoves.includes(move.id) || myMoveSubmitted || isFinished}
-                                                    onClick={() => submitMove(move.id)}
-                                                >
-                                                    <span>{move.name}</span>
-                                                    <span className="cost">{move.costDisplay}</span>
-                                                </button>
-                                            );
-                                        })}
+                            {history.length > 0 && (
+                                <div className="history-section">
+                                    <h3 className="history-title">Log</h3>
+                                    <div className="history-list">
+                                        {history.map((h, i) => (
+                                            <div key={i} className="history-item">
+                                                <span style={{ color: 'var(--text-muted)', minWidth: '30px', display: 'inline-block' }}>{history.length - i}</span>
+                                                <span>You: <span className="you">{h.you}</span></span>
+                                                <span>{opponent}: <span className="opp">{h.opp}</span></span>
+                                            </div>
+                                        ))}
                                     </div>
+                                </div>
+                            )}
 
-                                    {waitingForOpponent && (
-                                        <div className="waiting-overlay" style={{ marginTop: '2rem', border: 'none', background: 'transparent', padding: '0' }}>
-                                            <div className="waiting-dots">
-                                                <span></span>
-                                                <span></span>
-                                                <span></span>
-                                            </div>
-                                            <p className="waiting-text">Waiting for {opponent} to make a move...</p>
-                                        </div>
-                                    )}
-
-                                    {history.length > 0 && (
-                                        <div className="history-section">
-                                            <h3 className="history-title">Log</h3>
-                                            <div className="history-list">
-                                                {history.map((h, i) => (
-                                                    <div key={i} className="history-item">
-                                                        <span style={{ color: 'var(--text-muted)', minWidth: '30px', display: 'inline-block' }}>{history.length - i}</span>
-                                                        <span>You: <span className="you">{h.you}</span></span>
-                                                        <span>{opponent}: <span className="opp">{h.opp}</span></span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {gameState.status === 'finished' && (
-                                        <div className={`end-game-overlay ${gameState.didIWin ? 'win' : 'lose'}`}>
-                                            <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
-                                                {gameState.didIWin ? 'You Win!' : 'You Lose'}
-                                            </h2>
-                                            <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
-                                        </div>
-                                    )}
-                                </>
+                            {gameState.status === 'finished' && (
+                                <div className={`end-game-overlay ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                    <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                        {gameState.didIWin ? 'You Win!' : 'You Lose'}
+                                    </h2>
+                                    <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
