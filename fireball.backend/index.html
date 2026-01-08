@@ -257,6 +257,19 @@
             cursor: not-allowed;
         }
 
+        .move-btn.selected {
+            border: 2px solid var(--fire-orange);
+            background: var(--bg-card-hover);
+            opacity: 1 !important;
+            box-shadow: 0 0 10px rgba(234, 88, 12, 0.2);
+        }
+
+        .move-btn.faded {
+            opacity: 0.2;
+            filter: grayscale(1);
+            transform: scale(0.95);
+        }
+
         .move-btn .cost {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -496,6 +509,155 @@
             to {
                 transform: rotate(360deg);
             }
+        }
+
+        /* Online players badge */
+        .online-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+
+        .online-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* Waiting for opponent animation */
+        .waiting-overlay {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            margin-top: 1.5rem;
+        }
+
+        .waiting-text {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 1rem;
+            animation: fade-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes fade-pulse {
+
+            0%,
+            100% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .waiting-dots {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .waiting-dots span {
+            width: 10px;
+            height: 10px;
+            background: var(--fire-orange);
+            border-radius: 50%;
+            animation: bounce-dot 1.4s ease-in-out infinite;
+        }
+
+        .waiting-dots span:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .waiting-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .waiting-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce-dot {
+
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+
+            40% {
+                transform: translateY(-8px);
+                opacity: 1;
+            }
+        }
+
+        /* Warning box for no players online */
+        .warning-box {
+            padding: 1rem;
+            background: rgba(220, 38, 38, 0.08);
+            border: 1px solid rgba(220, 38, 38, 0.4);
+            border-radius: 4px;
+            color: #fca5a5;
+            font-size: 0.875rem;
+            margin-top: 1.5rem;
+            text-align: center;
+            animation: fade-in 0.3s ease;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Disconnected overlay */
+        .disconnected-overlay {
+            text-align: center;
+            padding: 3rem;
+            background: var(--bg-card);
+            border: 1px solid rgba(220, 38, 38, 0.4);
+        }
+
+        .disconnected-overlay h2 {
+            color: #fca5a5;
+            margin-bottom: 1rem;
+        }
+
+        .disconnected-overlay p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
         }
 
         /* Mobile */
@@ -971,15 +1133,67 @@
             );
         }
 
-        function Play1v1Page({ onNavigate, playerId }) {
+        function Play1v1Page({ onNavigate, playerId, onlineCount }) {
             const [username, setUsername] = useState('');
-            const [status, setStatus] = useState('idle'); // idle, searching, matched, playing
+            const [status, setStatus] = useState('idle'); // idle, searching, matched, playing, disconnected
             const [matchId, setMatchId] = useState(null);
             const [opponent, setOpponent] = useState('');
             const [gameState, setGameState] = useState(null);
             const [history, setHistory] = useState([]);
             const [loading, setLoading] = useState(false);
             const [pollInterval, setPollInterval] = useState(null);
+            const [myMoveSubmitted, setMyMoveSubmitted] = useState(false);
+            const [moveSubmitTime, setMoveSubmitTime] = useState(null);
+            const [searchStartTime, setSearchStartTime] = useState(null);
+            const [showNoPlayersWarning, setShowNoPlayersWarning] = useState(false);
+            const [selectedMove, setSelectedMove] = useState(null);
+
+            // Track search duration and show warning if no players found after 10 seconds
+            useEffect(() => {
+                if (status !== 'searching') {
+                    setShowNoPlayersWarning(false);
+                    setSearchStartTime(null);
+                    return;
+                }
+
+                setSearchStartTime(Date.now());
+
+                const checkInterval = setInterval(() => {
+                    const elapsed = Date.now() - searchStartTime;
+                    if (elapsed > 10000 && onlineCount <= 1) {
+                        setShowNoPlayersWarning(true);
+                    } else {
+                        setShowNoPlayersWarning(false);
+                    }
+                }, 1000);
+
+                return () => clearInterval(checkInterval);
+            }, [status, onlineCount]);
+
+            // 30-second timeout for opponent moves
+            useEffect(() => {
+                if (!myMoveSubmitted || !moveSubmitTime) return;
+
+                const checkTimeout = setInterval(() => {
+                    const elapsed = Date.now() - moveSubmitTime;
+                    if (elapsed > 30000) {
+                        clearInterval(checkTimeout);
+                        if (pollInterval) clearInterval(pollInterval);
+                        setStatus('disconnected');
+                    }
+                }, 1000);
+
+                return () => clearInterval(checkTimeout);
+            }, [myMoveSubmitted, moveSubmitTime, pollInterval]);
+
+            // Reset move submission state when turn changes
+            useEffect(() => {
+                if (gameState?.turn) {
+                    setMyMoveSubmitted(false);
+                    setMoveSubmitTime(null);
+                    setSelectedMove(null);
+                }
+            }, [gameState?.turn]);
 
             const findMatch = async () => {
                 if (!username.trim()) {
@@ -988,6 +1202,7 @@
                 }
 
                 setStatus('searching');
+                setSearchStartTime(Date.now());
 
                 try {
                     const res = await fetch('/api/matchmaking', {
@@ -1074,6 +1289,9 @@
 
             const submitMove = async (move) => {
                 setLoading(true);
+                setMyMoveSubmitted(true);
+                setSelectedMove(move);
+                setMoveSubmitTime(Date.now());
 
                 try {
                     await fetch('/api/matchmaking', {
@@ -1107,6 +1325,9 @@
                 setOpponent('');
                 setGameState(null);
                 setHistory([]);
+                setMyMoveSubmitted(false);
+                setMoveSubmitTime(null);
+                setSelectedMove(null);
             };
 
             useEffect(() => {
@@ -1118,6 +1339,17 @@
             const myCharges = gameState?.myCharges || 0;
             const legalMoves = getLegalMoves(myCharges);
 
+            // Check if we're waiting for opponent (we submitted but they haven't)
+            const waitingForOpponent = myMoveSubmitted && gameState && !gameState.opponentSubmitted && gameState.status !== 'finished';
+
+            // Online badge component
+            const OnlineBadge = () => (
+                <div className="online-badge">
+                    <span className="online-dot"></span>
+                    <span>{onlineCount} player{onlineCount !== 1 ? 's' : ''} online</span>
+                </div>
+            );
+
             return (
                 <div className="game-container">
                     <div className="game-header">
@@ -1128,6 +1360,7 @@
 
                     {status === 'idle' && (
                         <div className="matchmaking-status">
+                            <OnlineBadge />
                             <p>Enter a username to find an opponent</p>
                             <input
                                 type="text"
@@ -1144,9 +1377,23 @@
 
                     {status === 'searching' && (
                         <div className="matchmaking-status">
+                            <OnlineBadge />
                             <p>Searching for an opponent...</p>
                             <div className="loader"></div>
                             <button className="btn btn-secondary" onClick={leaveQueue} style={{ marginTop: '1rem' }}>Cancel</button>
+                            {showNoPlayersWarning && (
+                                <div className="warning-box">
+                                    Looks like there isn't anyone online. It might take a while to find an opponent.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {status === 'disconnected' && (
+                        <div className="disconnected-overlay">
+                            <h2>Opponent Disconnected</h2>
+                            <p>Your opponent took too long to respond and the match has been ended.</p>
+                            <button className="btn btn-primary" onClick={resetMatch}>Find New Match</button>
                         </div>
                     )}
 
@@ -1163,7 +1410,7 @@
                                 <>
                                     <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                                         Playing against <strong style={{ color: 'var(--accent-purple)' }}>{opponent}</strong>
-                                        {gameState.opponentSubmitted && <span> - Waiting for you</span>}
+                                        {gameState.opponentSubmitted && !myMoveSubmitted && <span> - Waiting for you</span>}
                                     </p>
 
                                     <div className="charge-display">
@@ -1178,18 +1425,34 @@
                                     </div>
 
                                     <div className="moves-grid">
-                                        {MOVES.map(move => (
-                                            <button
-                                                key={move.id}
-                                                className="move-btn"
-                                                disabled={loading || !legalMoves.includes(move.id)}
-                                                onClick={() => submitMove(move.id)}
-                                            >
-                                                <span>{move.name}</span>
-                                                <span className="cost">{move.costDisplay}</span>
-                                            </button>
-                                        ))}
+                                        {MOVES.map(move => {
+                                            const isSelected = selectedMove === move.id;
+                                            const isFaded = myMoveSubmitted && !isSelected;
+
+                                            return (
+                                                <button
+                                                    key={move.id}
+                                                    className={`move-btn ${isSelected ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                                    disabled={loading || !legalMoves.includes(move.id) || myMoveSubmitted}
+                                                    onClick={() => submitMove(move.id)}
+                                                >
+                                                    <span>{move.name}</span>
+                                                    <span className="cost">{move.costDisplay}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
+
+                                    {waitingForOpponent && (
+                                        <div className="waiting-overlay" style={{ marginTop: '2rem', border: 'none', background: 'transparent', padding: '0' }}>
+                                            <div className="waiting-dots">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                            <p className="waiting-text">Waiting for {opponent} to make a move...</p>
+                                        </div>
+                                    )}
 
                                     {history.length > 0 && (
                                         <div className="history-section">
@@ -1211,6 +1474,7 @@
                 </div>
             );
         }
+
 
         function App() {
             const getPageFromUrl = () => {
@@ -1283,7 +1547,7 @@
                 };
 
                 sendHeartbeat();
-                const interval = setInterval(sendHeartbeat, 30000);
+                const interval = setInterval(sendHeartbeat, 10000);
                 return () => clearInterval(interval);
             }, [playerId, page]);
 
