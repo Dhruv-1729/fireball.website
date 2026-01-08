@@ -327,22 +327,68 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.95);
+            background: rgba(10, 10, 15, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border: 3px solid;
-            border-radius: 16px;
-            padding: 3rem 4rem;
+            border-radius: 20px;
+            padding: 2.5rem 3.5rem;
             text-align: center;
             z-index: 1000;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                inset 0 1px 1px rgba(255, 255, 255, 0.1);
             animation: slideDown 0.4s ease;
+            max-width: 90%;
         }
 
         .end-game-overlay.win {
             border-color: var(--fire-orange);
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 40px rgba(234, 88, 12, 0.3),
+                inset 0 1px 1px rgba(255, 255, 255, 0.1);
         }
 
         .end-game-overlay.lose {
             border-color: var(--text-muted);
+        }
+
+        .final-moves {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            font-size: 1.1rem;
+        }
+
+        .final-moves .move-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .final-moves .move-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .final-moves .move-name {
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .final-moves .vs {
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 1.5rem;
         }
 
         @keyframes slideDown {
@@ -1615,6 +1661,23 @@
                                     <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
                                         {gameState.didIWin ? 'You Win!' : 'You Lose'}
                                     </h2>
+                                    {gameState.lastMyMove && gameState.lastOpponentMove && (
+                                        <div className="final-moves">
+                                            <div className="move-item">
+                                                <div className="move-label">You</div>
+                                                <div className="move-name" style={{ color: 'var(--accent-purple)' }}>
+                                                    {gameState.lastMyMove}
+                                                </div>
+                                            </div>
+                                            <div className="vs">vs</div>
+                                            <div className="move-item">
+                                                <div className="move-label">{opponent}</div>
+                                                <div className="move-name" style={{ color: 'var(--fire-orange)' }}>
+                                                    {gameState.lastOpponentMove}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
                                 </div>
                             )}
