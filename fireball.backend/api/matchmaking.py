@@ -278,6 +278,7 @@ class handler(BaseHTTPRequestHandler):
         if winner in ['player1', 'player2']:
             update_data['status'] = 'finished'
             update_data['winner'] = winner
+            update_data['finished_at'] = firestore.SERVER_TIMESTAMP
 
         match_ref.update(update_data)
 
@@ -302,6 +303,12 @@ class handler(BaseHTTPRequestHandler):
 
         is_player1 = match['player1'] == player_id
         opponent_submitted = (match['player2_move'] is not None) if is_player1 else (match['player1_move'] is not None)
+        
+        # Determine if current player won
+        winner = match.get('winner')
+        did_i_win = None
+        if winner:
+            did_i_win = (is_player1 and winner == 'player1') or (not is_player1 and winner == 'player2')
 
         return {
             'myCharges': match['player1_charges'] if is_player1 else match['player2_charges'],
@@ -309,6 +316,7 @@ class handler(BaseHTTPRequestHandler):
             'turn': match['turn'],
             'status': match['status'],
             'winner': match.get('winner'),
+            'didIWin': did_i_win,
             'lastResult': match.get('last_result'),
             'lastMyMove': match.get('last_p1_move') if is_player1 else match.get('last_p2_move'),
             'lastOpponentMove': match.get('last_p2_move') if is_player1 else match.get('last_p1_move'),

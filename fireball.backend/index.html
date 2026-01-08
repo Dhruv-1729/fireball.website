@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fireball</title>
     <meta name="description"
-        content="Strategic battle game powered by machine learning. Challenge the AI or play against friends online.">
+        content="Strategic battle game powered by machine learning. Challenge the bot or play against friends online.">
     <link rel="icon" type="image/svg+xml" href="/fireball_logo.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -167,6 +167,12 @@
         .game-logo {
             width: 48px;
             height: 48px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .game-logo:hover {
+            transform: scale(1.05);
         }
 
         .game-title {
@@ -737,18 +743,18 @@
                     <div className="home-header">
                         <img src="/fireball_logo.png" alt="Fireball" className="home-logo" />
                         <h1 className="home-title">Fireball</h1>
-                        <p className="home-subtitle">Strategic battle game powered by machine learning</p>
+                        <p className="home-subtitle">Strategic game powered by machine learning</p>
                     </div>
 
                     <div className="home-grid">
                         <div className="home-card" onClick={() => onNavigate('play-ai')}>
                             <h2 className="home-card-title">Play vs ML Model</h2>
-                            <p className="home-card-desc">Challenge the Q-learning AI trained on thousands of games</p>
+                            <p className="home-card-desc">Challenge the Machine Learning Bot trained on thousands of games</p>
                         </div>
 
                         <div className="home-card" onClick={() => onNavigate('guide')}>
                             <h2 className="home-card-title">How to Play</h2>
-                            <p className="home-card-desc">Learn the rules and master the strategy</p>
+                            <p className="home-card-desc">Learn the rules!</p>
                         </div>
 
                         <div className="home-card" onClick={() => onNavigate('play-1v1')}>
@@ -822,7 +828,7 @@
             return (
                 <div className="game-container" style={{ maxWidth: '1200px' }}>
                     <div className="game-header">
-                        <img src="/fireball_logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => onNavigate('home')} />
                         <h1 className="game-title">Admin Dashboard</h1>
                         <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
                     </div>
@@ -841,7 +847,7 @@
                                 <button
                                     className={`btn ${activeTab === 'ai-games' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('ai-games')}
-                                >AI Games ({stats.aiGames || 0})</button>
+                                >Bot Games ({stats.aiGames || 0})</button>
                                 <button
                                     className={`btn ${activeTab === 'online-games' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('online-games')}
@@ -882,7 +888,7 @@
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Outcome</th>
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player Moves</th>
-                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>AI Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>ML Bot Moves</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -958,7 +964,7 @@
             return (
                 <div className="guide-container">
                     <div className="game-header">
-                        <img src="/fireball_logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => onNavigate('home')} />
                         <h1 className="game-title">How to Play</h1>
                         <button className="back-btn" onClick={() => onNavigate('home')}>Back to Menu</button>
                     </div>
@@ -1068,7 +1074,7 @@
             return (
                 <div className="game-container">
                     <div className="game-header">
-                        <img src="/fireball_logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => onNavigate('home')} />
                         <h1 className="game-title">vs ML Model</h1>
                         <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
                     </div>
@@ -1093,8 +1099,8 @@
                             </h2>
                             <p className="end-subtitle">
                                 {game.winner === 'player1'
-                                    ? 'Nice work. You outplayed the model.'
-                                    : 'The AI predicted your moves. Try a different strategy.'}
+                                    ? 'Nice work! You beat the model!'
+                                    : 'The AI predicted your moves and beat you!'}
                             </p>
                             <button className="btn btn-primary" onClick={resetGame}>Play Again</button>
                         </div>
@@ -1122,6 +1128,7 @@
                             <div className="history-list">
                                 {history.map((h, i) => (
                                     <div key={i} className="history-item">
+                                        <span style={{ color: 'var(--text-muted)', minWidth: '30px', display: 'inline-block' }}>{history.length - i}</span>
                                         <span>You: <span className="you">{h.player}</span></span>
                                         <span>AI: <span className="opp">{h.ai}</span></span>
                                     </div>
@@ -1160,7 +1167,7 @@
 
                 const checkInterval = setInterval(() => {
                     const elapsed = Date.now() - searchStartTime;
-                    if (elapsed > 10000 && onlineCount <= 1) {
+                    if (elapsed > 7000 && onlineCount <= 1) {
                         setShowNoPlayersWarning(true);
                     } else {
                         setShowNoPlayersWarning(false);
@@ -1353,7 +1360,7 @@
             return (
                 <div className="game-container">
                     <div className="game-header">
-                        <img src="/fireball_logo.png" alt="" className="game-logo" />
+                        <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => { leaveQueue(); onNavigate('home'); }} />
                         <h1 className="game-title">Play Online</h1>
                         <button className="back-btn" onClick={() => { leaveQueue(); onNavigate('home'); }}>Back</button>
                     </div>
@@ -1456,10 +1463,11 @@
 
                                     {history.length > 0 && (
                                         <div className="history-section">
-                                            <h3 className="history-title">History</h3>
+                                            <h3 className="history-title">Log</h3>
                                             <div className="history-list">
                                                 {history.map((h, i) => (
                                                     <div key={i} className="history-item">
+                                                        <span style={{ color: 'var(--text-muted)', minWidth: '30px', display: 'inline-block' }}>{history.length - i}</span>
                                                         <span>You: <span className="you">{h.you}</span></span>
                                                         <span>{opponent}: <span className="opp">{h.opp}</span></span>
                                                     </div>
@@ -1547,7 +1555,7 @@
                 };
 
                 sendHeartbeat();
-                const interval = setInterval(sendHeartbeat, 10000);
+                const interval = setInterval(sendHeartbeat, 5000);
                 return () => clearInterval(interval);
             }, [playerId, page]);
 

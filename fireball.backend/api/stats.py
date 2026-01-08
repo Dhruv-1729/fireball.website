@@ -80,11 +80,18 @@ class handler(BaseHTTPRequestHandler):
             # Get Online/1v1 Games with full details
             online_games = []
             try:
-                matches_1v1_ref = db.collection("matches").where("status", "==", "finished").order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+                # First try with finished_at ordering
+                try:
+                    matches_1v1_ref = db.collection("matches").where("status", "==", "finished").order_by("finished_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+                except:
+                    # Fallback to created_at if finished_at doesn't exist or isn't indexed
+                    matches_1v1_ref = db.collection("matches").where("status", "==", "finished").limit(100).stream()
 
                 for doc in matches_1v1_ref:
                     match = doc.to_dict()
-                    timestamp = match.get('created_at')
+                    
+                    # Try to get finished_at, fallback to created_at
+                    timestamp = match.get('finished_at') or match.get('created_at')
                     ts_str = ''
                     if timestamp:
                         try:
