@@ -327,19 +327,20 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(10, 10, 15, 0.75);
+            background: rgba(10, 10, 15, 0.85);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 3px solid;
             border-radius: 20px;
-            padding: 2.5rem 3.5rem;
+            padding: 3rem;
             text-align: center;
             z-index: 1000;
             box-shadow:
                 0 20px 60px rgba(0, 0, 0, 0.5),
                 inset 0 1px 1px rgba(255, 255, 255, 0.1);
             animation: slideDown 0.4s ease;
-            max-width: 90%;
+            max-width: 400px;
+            position: relative;
         }
 
         .end-game-overlay.win {
@@ -354,41 +355,31 @@
             border-color: var(--text-muted);
         }
 
-        .final-moves {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            align-items: center;
-            margin: 1.5rem 0;
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            font-size: 1.1rem;
-        }
-
-        .final-moves .move-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .final-moves .move-label {
-            font-size: 0.8rem;
+        .close-overlay-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: transparent;
+            border: none;
             color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .final-moves .move-name {
-            font-weight: 700;
-            font-size: 1.2rem;
-        }
-
-        .final-moves .vs {
-            color: var(--text-muted);
-            font-weight: 700;
             font-size: 1.5rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .close-overlay-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .play-again-header {
+            margin-top: 1rem;
         }
 
         @keyframes slideDown {
@@ -1341,6 +1332,7 @@
             const [moveSubmitTime, setMoveSubmitTime] = useState(null);
             const [searchStartTime, setSearchStartTime] = useState(null);
             const [showNoPlayersWarning, setShowNoPlayersWarning] = useState(false);
+            const [showEndOverlay, setShowEndOverlay] = useState(true);
             const [selectedMove, setSelectedMove] = useState(null);
 
             // Track search duration and show warning if no players found after 10 seconds
@@ -1363,7 +1355,7 @@
                 }, 1000);
 
                 return () => clearInterval(checkInterval);
-            }, [status, onlineCount]);
+            }, [status, onlineCount, searchStartTime]);
 
             // 30-second timeout for opponent moves
             useEffect(() => {
@@ -1476,6 +1468,7 @@
 
                     if (data.status === 'finished') {
                         clearInterval(pollInterval);
+                        setShowEndOverlay(true);
                     }
                 } catch (e) {
                     console.error('Fetch state error:', e);
@@ -1521,8 +1514,11 @@
                 setGameState(null);
                 setHistory([]);
                 setMyMoveSubmitted(false);
-                setMoveSubmitTime(null);
                 setSelectedMove(null);
+                setMoveSubmitTime(null);
+                setSearchStartTime(null);
+                setShowNoPlayersWarning(false);
+                setShowEndOverlay(true);
             };
 
             useEffect(() => {
@@ -1549,7 +1545,12 @@
                 <div className="game-container">
                     <div className="game-header">
                         <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => { leaveQueue(); onNavigate('home'); }} />
-                        <h1 className="game-title">Play Online</h1>
+                        <div>
+                            <h1 className="game-title">Play Online</h1>
+                            {gameState?.status === 'finished' && !showEndOverlay && (
+                                <button className="btn btn-primary play-again-header" onClick={resetMatch}>Play Again</button>
+                            )}
+                        </div>
                         <button className="back-btn" onClick={() => { leaveQueue(); onNavigate('home'); }}>Back</button>
                     </div>
 
@@ -1605,7 +1606,7 @@
                                     <div className="charge-value">{gameState.myCharges}</div>
                                 </div>
                                 <div className="charge-block opponent-charge">
-                                    <div className="charge-label">{opponent}</div>
+                                    <div className="charge-label">{opponent}'s Charges</div>
                                     <div className="charge-value">{gameState.opponentCharges}</div>
                                 </div>
                             </div>
@@ -1656,29 +1657,12 @@
                                 </div>
                             )}
 
-                            {gameState.status === 'finished' && (
+                            {gameState.status === 'finished' && showEndOverlay && (
                                 <div className={`end-game-overlay ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                    <button className="close-overlay-btn" onClick={() => setShowEndOverlay(false)}>✕</button>
                                     <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
                                         {gameState.didIWin ? 'You Win!' : 'You Lose'}
                                     </h2>
-                                    {gameState.lastMyMove && gameState.lastOpponentMove && (
-                                        <div className="final-moves">
-                                            <div className="move-item">
-                                                <div className="move-label">You</div>
-                                                <div className="move-name" style={{ color: 'var(--accent-purple)' }}>
-                                                    {gameState.lastMyMove}
-                                                </div>
-                                            </div>
-                                            <div className="vs">vs</div>
-                                            <div className="move-item">
-                                                <div className="move-label">{opponent}</div>
-                                                <div className="move-name" style={{ color: 'var(--fire-orange)' }}>
-                                                    {gameState.lastOpponentMove}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <button className="btn btn-primary" onClick={resetMatch}>Play Again</button>
                                 </div>
                             )}
                         </>
