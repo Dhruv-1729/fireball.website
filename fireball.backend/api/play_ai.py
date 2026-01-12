@@ -158,91 +158,18 @@ class FireballGame:
 
 # ============ FIREBASE INIT ============
 
-# EMERGENCY MODE: Make Firebase completely optional
-FIREBASE_ENABLED = False  # Set to False to disable all Firebase operations
-
-# Initialize Firebase
 if not firebase_admin._apps:
     try:
         service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
         cred = credentials.Certificate(service_account_info)
         firebase_admin.initialize_app(cred)
-        FIREBASE_ENABLED = True
     except Exception as e:
         print(f"Firebase Init Error: {e}")
-        FIREBASE_ENABLED = False
 
 try:
-    db = firestore.client() if FIREBASE_ENABLED else None
+    db = firestore.client()
 except:
     db = None
-    FIREBASE_ENABLED = False
-
-print(f"[PLAY_AI] Firebase status: {'ENABLED' if FIREBASE_ENABLED else 'DISABLED (using local model only)'}")
-
-
-# === HEURISTICS & FALLBACK LOGIC ===
-def get_heuristic_move(my_charges, opp_charges, move_history, opp_history, legal_moves):
-    """
-    Provides a strategic move when Q-table doesn't have the state.
-    This prevents purely random moves and adds baseline intelligence.
-    """
-    # If we have 5 charges, use megaball for instant win
-    if 'megaball' in legal_moves:
-        return 'megaball'
-    
-    # If opponent has 5+ charges, they might megaball - shield is useless, so attack or charge
-    if opp_charges >= 5:
-        # Try to attack before they megaball
-        if 'iceball' in legal_moves:
-            return 'iceball'
-        elif 'fireball' in legal_moves:
-            return 'fireball'
-        return 'charge'
-    
-    # If opponent has no charges, they will likely charge - attack them!
-    if opp_charges == 0:
-        if 'fireball' in legal_moves:
-            return 'fireball' if random.random() < 0.7 else 'charge'
-        return 'charge'
-    
-    # If we have low charges and opponent has charges, be strategic
-    if my_charges <= 1 and opp_charges >= 2:
-        # Opponent likely to attack, consider shield but not too often
-        if random.random() < 0.4:
-            return 'shield'
-        return 'charge'
-    
-    # If we have more charges than opponent, be aggressive
-    if my_charges > opp_charges and my_charges >= 2:
-        if 'iceball' in legal_moves and random.random() < 0.5:
-            return 'iceball'
-        elif 'fireball' in legal_moves:
-            return 'fireball'
-    
-    # Default: Mix of charge and attacks, avoid shield overuse
-    weights = {}
-    for move in legal_moves:
-        if move == 'charge':
-            weights[move] = 0.4
-        elif move == 'shield':
-            weights[move] = 0.15  # Low weight to avoid overuse
-        elif move == 'fireball':
-            weights[move] = 0.25
-        elif move == 'iceball':
-            weights[move] = 0.15
-        elif move == 'megaball':
-            weights[move] = 0.05
-    
-    total = sum(weights.get(m, 0.1) for m in legal_moves)
-    r = random.random() * total
-    cumulative = 0
-    for move in legal_moves:
-        cumulative += weights.get(move, 0.1)
-        if r <= cumulative:
-            return move
-    return legal_moves[0]
-
 
 # ============ MODEL LOADING ============
 
@@ -257,7 +184,7 @@ AB_TEST_GAMES_REQUIRED = 15
 
 def get_ml_config():
     """Get ML configuration from Firebase."""
-    if not FIREBASE_ENABLED or not db:
+    if not db:
         return None
     try:
         config_ref = db.collection('ml_config').document('main')
@@ -270,7 +197,7 @@ def get_ml_config():
 
 def update_ml_config(updates):
     """Update ML configuration in Firebase."""
-    if not FIREBASE_ENABLED or not db:
+    if not db:
         return False
     try:
         config_ref = db.collection('ml_config').document('main')
@@ -283,7 +210,7 @@ def update_ml_config(updates):
 
 def load_model_from_firebase(version_name):
     """Load a model from Firebase."""
-    if not FIREBASE_ENABLED or not db or not version_name:
+    if not db or not version_name:
         return None
     try:
         doc = db.collection('ml_models').document(version_name).get()
@@ -488,9 +415,8 @@ class handler(BaseHTTPRequestHandler):
 
             result = game.execute_turn(player_move, ai_move)
 
-
-            # Log to Firebase (optional, fail silently)
-            if FIREBASE_ENABLED and db:
+            # Log game data to Firebase
+            if db:
                 try:
                     move_history = data.get('moveHistory', []) + [player_move]
                     ai_history = data.get('oppMoveHistory', []) + [ai_move]
@@ -527,7 +453,7 @@ class handler(BaseHTTPRequestHandler):
                         record_game_result_and_check_ab(model_id, ai_won, config)
                         
                 except Exception as log_err:
-                    print(f"Firebase logging error (non-critical): {log_err}")
+                    print(f"Logging error: {log_err}")
 
             response = {
                 "playerCharges": game.player_charges,

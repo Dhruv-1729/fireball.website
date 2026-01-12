@@ -104,8 +104,7 @@ class handler(BaseHTTPRequestHandler):
         return {'status': 'ok'}
 
     def get_online_count(self):
-        # Count players with lastSeen within last 60 seconds
-        cutoff = time.time() - 60
+        cutoff = time.time() - 30
         
         # Firestore timestamp comparison
         from datetime import datetime, timezone
