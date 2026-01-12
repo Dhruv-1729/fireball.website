@@ -82,12 +82,33 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 print(f"AI games error: {e}")
 
-            # Calculate AI stats
-            total_ai_games = len(ai_games)
+            # Calculate AI stats from the limited list (for display)
+            display_ai_games = len(ai_games)
             ai_wins = sum(1 for g in ai_games if g['winner'] == 'ai')
             total_turns = sum(g['turns'] for g in ai_games)
-            win_rate = (ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
-            avg_length = total_turns / total_ai_games if total_ai_games > 0 else 0
+            
+            # Get TOTAL count of AI games (not limited to 100)
+            try:
+                all_ai_games_ref = db.collection("ai_vs_human_matches").stream()
+                all_ai_games_list = list(all_ai_games_ref)
+                total_ai_games = len(all_ai_games_list)
+                # Calculate win rate from ALL games
+                all_ai_wins = sum(1 for g in all_ai_games_list if g.to_dict().get('winner') == 'ai')
+                win_rate = (all_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
+                
+                # Get unique visitors from distinct user_ids
+                unique_user_ids = set()
+                for g in all_ai_games_list:
+                    uid = g.to_dict().get('user_id')
+                    if uid and uid != 'unknown' and uid != 'N/A':
+                        unique_user_ids.add(uid)
+                unique_visitor_count = len(unique_user_ids) if unique_user_ids else unique_visitor_count
+            except Exception as count_err:
+                print(f"Total count error: {count_err}")
+                total_ai_games = display_ai_games
+                win_rate = (ai_wins / display_ai_games) * 100 if display_ai_games > 0 else 0
+            
+            avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
             # Get Online/1v1 Games with full details
             online_games = []
