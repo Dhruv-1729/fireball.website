@@ -206,14 +206,37 @@ def train_new_model(episodes=100000, self_play_ratio=0.4):
             if use_self_play:
                 frozen_opponent_ai.update_histories(p_move, action)
             
-            # Reward structure
+            # Enhanced reward structure to encourage strategic play
             reward = 0
             if result == "player2":  # AI wins
-                reward = 15
+                reward = 20
+                # Bonus for winning with style (high charges remaining)
+                if game.comp_charges >= 3:
+                    reward += 3
             elif result == "player1":  # AI loses
-                reward = -15
+                reward = -20
             else:
-                reward = (ai_chg - p_chg) * 0.2 - 0.1
+                # Base reward: slight preference for gaining charge advantage
+                charge_diff = game.comp_charges - game.player_charges
+                reward = charge_diff * 0.15
+                
+                # Penalize shield overuse - shields don't advance the game
+                if action == "shield":
+                    reward -= 0.3  # Small penalty for shielding
+                    # Extra penalty for shielding when opponent has no charges (useless shield)
+                    if game.player_charges == 0:
+                        reward -= 0.5
+                
+                # Reward charging when it leads to more options
+                if action == "charge" and game.comp_charges >= 1:
+                    reward += 0.1
+                
+                # Small penalty for stalling (both shield or both charge repeatedly)
+                if len(ai.move_history) >= 2 and ai.move_history[-1] == ai.move_history[-2] == "shield":
+                    reward -= 0.4  # Penalize repeated shields
+                
+                # Time pressure penalty to encourage finishing games
+                reward -= 0.05
 
             next_state = ai.get_state(game.comp_charges, game.player_charges)
             next_legal = FireballQLearning.get_legal_moves(game.comp_charges)

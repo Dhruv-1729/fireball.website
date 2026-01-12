@@ -142,6 +142,60 @@ def get_training_data_stats():
         return {}
 
 
+def get_historical_win_rates(days=180):
+    """Get historical win rate data aggregated by date for charting."""
+    if not db:
+        return []
+    
+    try:
+        from datetime import datetime, timezone, timedelta
+        
+        # Get all AI games from the last N days
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        ai_games = list(db.collection('ai_vs_human_matches').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(2000).stream())
+        
+        # Group games by date
+        date_stats = {}
+        for doc in ai_games:
+            game = doc.to_dict()
+            timestamp = game.get('timestamp')
+            if not timestamp:
+                continue
+            
+            try:
+                # Get the date string
+                if hasattr(timestamp, 'date'):
+                    date_key = timestamp.date().isoformat()
+                else:
+                    date_key = str(timestamp)[:10]
+                
+                if date_key not in date_stats:
+                    date_stats[date_key] = {'total': 0, 'wins': 0}
+                
+                date_stats[date_key]['total'] += 1
+                if game.get('winner') == 'ai':
+                    date_stats[date_key]['wins'] += 1
+            except:
+                continue
+        
+        # Convert to list sorted by date
+        result = []
+        for date_str in sorted(date_stats.keys()):
+            stats = date_stats[date_str]
+            win_rate = round((stats['wins'] / stats['total']) * 100, 1) if stats['total'] > 0 else 0
+            result.append({
+                'date': date_str,
+                'total': stats['total'],
+                'wins': stats['wins'],
+                'winRate': win_rate
+            })
+        
+        return result
+    except Exception as e:
+        print(f"Error getting historical win rates: {e}")
+        return []
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -155,6 +209,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             config = get_ml_config()
             training_stats = get_training_data_stats()
+            historical_rates = get_historical_win_rates(days=180)
             
             response = {
                 'config': {
@@ -173,7 +228,8 @@ class handler(BaseHTTPRequestHandler):
                     'model_b_wins': config.get('model_b_wins', 0) if config else 0
                 },
                 'training_data': training_stats,
-                'master_switch': TRAINING_ENABLED
+                'master_switch': TRAINING_ENABLED,
+                'historical_win_rates': historical_rates
             }
             
             self.send_response(200)

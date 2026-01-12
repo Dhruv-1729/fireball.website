@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fireball</title>
-    <meta name="description"
-        content="Strategic battle game powered by machine learning. Challenge the bot or play against friends online.">
+    <meta name="description" content="A rapid and strategic alternative to Rock-Paper-Scissors">
     <link rel="icon" type="image/svg+xml" href="/fireball_logo.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -812,6 +811,16 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        // Generate or retrieve persistent user ID for tracking unique browsers
+        function getOrCreateUserId() {
+            let userId = localStorage.getItem('fireball_user_id');
+            if (!userId) {
+                userId = 'user_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
+                localStorage.setItem('fireball_user_id', userId);
+            }
+            return userId;
+        }
+
         function HomePage({ onNavigate }) {
             return (
                 <div className="home-container">
@@ -824,7 +833,7 @@
                     <div className="home-grid">
                         <div className="home-card" onClick={() => onNavigate('play-ai')}>
                             <h2 className="home-card-title">Play vs ML Model</h2>
-                            <p className="home-card-desc">Challenge the Machine Learning Bot trained on thousands of games</p>
+                            <p className="home-card-desc">Play against a ML bot that analyzes common patterns</p>
                         </div>
 
                         <div className="home-card" onClick={() => onNavigate('guide')}>
@@ -852,6 +861,7 @@
             const [mlStatus, setMlStatus] = useState(null);
             const [loading, setLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('overview');
+            const [chartTimeframe, setChartTimeframe] = useState('30d');
 
             const handleLogin = async () => {
                 const hash = await sha256(password);
@@ -963,7 +973,7 @@
                             {activeTab === 'ml-status' && (
                                 <div style={{ display: 'grid', gap: '1.5rem' }}>
                                     <div className="home-card" style={{ cursor: 'default', padding: '1.5rem' }}>
-                                        <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>🤖 ML Training System</h3>
+                                        <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>ML Training System</h3>
                                         {mlStatus ? (
                                             <div style={{ display: 'grid', gap: '0.75rem', fontSize: '0.9rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1025,6 +1035,114 @@
                                                         Upload Original Model to Firebase
                                                     </button>
                                                 )}
+
+                                                {/* ML Win Rate Chart */}
+                                                {mlStatus.historical_win_rates && mlStatus.historical_win_rates.length > 0 && (
+                                                    <div style={{ marginTop: '2rem' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                                            <h4 style={{ margin: 0 }}>ML Win Rate Over Time</h4>
+                                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                                {['1d', '7d', '30d', '90d', '6mo'].map(tf => (
+                                                                    <button
+                                                                        key={tf}
+                                                                        onClick={() => setChartTimeframe(tf)}
+                                                                        style={{
+                                                                            padding: '0.25rem 0.75rem',
+                                                                            fontSize: '0.75rem',
+                                                                            background: chartTimeframe === tf ? 'var(--fire-orange)' : 'var(--bg-secondary)',
+                                                                            border: '1px solid var(--border-subtle)',
+                                                                            color: chartTimeframe === tf ? 'white' : 'var(--text-secondary)',
+                                                                            cursor: 'pointer',
+                                                                            borderRadius: '4px'
+                                                                        }}
+                                                                    >{tf}</button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                        {(() => {
+                                                            const now = new Date();
+                                                            const daysMap = { '1d': 1, '7d': 7, '30d': 30, '90d': 90, '6mo': 180 };
+                                                            const days = daysMap[chartTimeframe] || 30;
+                                                            const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                                                            const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+
+                                                            const filteredData = mlStatus.historical_win_rates.filter(d => d.date >= cutoffStr);
+
+                                                            if (filteredData.length === 0) {
+                                                                return <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No data for this timeframe</p>;
+                                                            }
+
+                                                            const maxRate = Math.max(...filteredData.map(d => d.winRate), 100);
+                                                            const minRate = Math.min(...filteredData.map(d => d.winRate), 0);
+                                                            const chartWidth = 600;
+                                                            const chartHeight = 200;
+                                                            const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+                                                            const innerWidth = chartWidth - padding.left - padding.right;
+                                                            const innerHeight = chartHeight - padding.top - padding.bottom;
+
+                                                            const points = filteredData.map((d, i) => {
+                                                                const x = padding.left + (i / Math.max(filteredData.length - 1, 1)) * innerWidth;
+                                                                const y = padding.top + innerHeight - ((d.winRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
+                                                                return { x, y, ...d };
+                                                            });
+
+                                                            const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+                                                            // Calculate average win rate for reference line
+                                                            const avgRate = filteredData.reduce((sum, d) => sum + d.winRate, 0) / filteredData.length;
+                                                            const avgY = padding.top + innerHeight - ((avgRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
+
+                                                            return (
+                                                                <div style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '1rem', overflow: 'auto' }}>
+                                                                    <svg width={chartWidth} height={chartHeight} style={{ display: 'block', margin: '0 auto' }}>
+                                                                        {/* Grid lines */}
+                                                                        {[0, 25, 50, 75, 100].map(pct => {
+                                                                            const y = padding.top + innerHeight - (pct / 100) * innerHeight;
+                                                                            return (
+                                                                                <g key={pct}>
+                                                                                    <line x1={padding.left} y1={y} x2={chartWidth - padding.right} y2={y} stroke="var(--border-subtle)" strokeDasharray="4" />
+                                                                                    <text x={padding.left - 10} y={y + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">{pct}%</text>
+                                                                                </g>
+                                                                            );
+                                                                        })}
+
+                                                                        {/* Average line */}
+                                                                        <line x1={padding.left} y1={avgY} x2={chartWidth - padding.right} y2={avgY} stroke="var(--fire-orange)" strokeDasharray="6" strokeOpacity="0.5" />
+                                                                        <text x={chartWidth - padding.right + 5} y={avgY + 4} fill="var(--fire-orange)" fontSize="10">Avg: {avgRate.toFixed(1)}%</text>
+
+                                                                        {/* Win rate line */}
+                                                                        <path d={pathD} fill="none" stroke="var(--accent-purple)" strokeWidth="2" />
+
+                                                                        {/* Data points */}
+                                                                        {points.map((p, i) => (
+                                                                            <g key={i}>
+                                                                                <circle cx={p.x} cy={p.y} r="4" fill="var(--accent-purple)" />
+                                                                                <title>{p.date}: {p.winRate}% ({p.wins}/{p.total})</title>
+                                                                            </g>
+                                                                        ))}
+
+                                                                        {/* X-axis labels */}
+                                                                        {filteredData.length <= 10 ? filteredData.map((d, i) => (
+                                                                            <text key={i} x={points[i].x} y={chartHeight - 10} fill="var(--text-muted)" fontSize="9" textAnchor="middle" transform={`rotate(-45, ${points[i].x}, ${chartHeight - 10})`}>
+                                                                                {d.date.slice(5)}
+                                                                            </text>
+                                                                        )) : (
+                                                                            [0, Math.floor(filteredData.length / 2), filteredData.length - 1].map(i => (
+                                                                                <text key={i} x={points[i].x} y={chartHeight - 10} fill="var(--text-muted)" fontSize="9" textAnchor="middle">
+                                                                                    {filteredData[i].date.slice(5)}
+                                                                                </text>
+                                                                            ))
+                                                                        )}
+                                                                    </svg>
+                                                                    <div style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                                        Total games in period: {filteredData.reduce((sum, d) => sum + d.total, 0)} |
+                                                                        Average win rate: {avgRate.toFixed(1)}%
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
                                             <p style={{ color: 'var(--text-muted)' }}>ML status not available. The /api/ml_manage endpoint may not be deployed.</p>
@@ -1067,7 +1185,9 @@
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Outcome</th>
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>User ID</th>
                                                 <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>ML Bot Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Bot ID</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1081,13 +1201,19 @@
                                                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
                                                         {game.playerMoves?.join(', ') || 'N/A'}
                                                     </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--accent-purple)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                                                        {game.userId ? (game.userId.length > 16 ? game.userId.slice(0, 16) + '...' : game.userId) : 'N/A'}
+                                                    </td>
                                                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
                                                         {game.aiMoves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--fire-orange)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                                                        {game.modelId || 'A'}
                                                     </td>
                                                 </tr>
                                             ))}
                                             {(!stats.aiGamesList || stats.aiGamesList.length === 0) && (
-                                                <tr><td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
+                                                <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -1152,14 +1278,14 @@
                         <h2>The Basics</h2>
                         <p>
                             Fireball is a turn-based strategy game where you and your opponent choose moves simultaneously.
-                            The goal is simple: land a successful attack on your opponent before they get you.
+                            The goal is simple: play a successful attack on your opponent before they play one on you.
                         </p>
 
                         <h3>Moves</h3>
                         <ul>
                             <li>
-                                <strong>Charge</strong> - Gain 1 energy. You need energy to use attacks.
-                                This is your bread and butter, but be careful - you are vulnerable while charging.
+                                <strong>Charge</strong> - Gain 1 energy. You need this energy to play attacks.
+                                This is what you need to win, but be careful - you are vulnerable while charging.
                             </li>
                             <li>
                                 <strong>Shield</strong> - Blocks all attacks except Megaball. Costs nothing.
@@ -1181,14 +1307,14 @@
 
                         <h3>Strategy Tips</h3>
                         <p>
-                            The game is all about reading your opponent. If they just used their last charge on an attack,
+                            The game is all about reading the patterns your opponent makes. If they just used their last charge on an attack,
                             they will probably need to charge again - perfect time for a Fireball. If you have been
                             charging a lot, they might expect an attack and Shield, so maybe charge one more time.
                         </p>
 
                         <h3>Playing the AI</h3>
                         <p>
-                            The ML model has been trained on thousands of games using Q-learning.
+                            The ML model has been trained on thousands of games using different algorithms.
                             It learns patterns and will adapt to predictable play. Mix up your strategy to keep it guessing.
                         </p>
 
@@ -1200,7 +1326,7 @@
             );
         }
 
-        function PlayAIPage({ onNavigate }) {
+        function PlayAIPage({ onNavigate, userId }) {
             const [game, setGame] = useState({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
             const [history, setHistory] = useState([]);
             const [loading, setLoading] = useState(false);
@@ -1221,7 +1347,8 @@
                             playerCharges: game.playerCharges,
                             aiCharges: game.aiCharges,
                             moveHistory: history.map(h => h.player),
-                            oppMoveHistory: history.map(h => h.ai)
+                            oppMoveHistory: history.map(h => h.ai),
+                            userId: userId
                         })
                     });
 
@@ -1696,6 +1823,9 @@
                 return id;
             });
 
+            // Persistent userId for tracking unique browsers (survives browser close)
+            const [userId] = useState(() => getOrCreateUserId());
+
             // URL routing
             const navigate = (newPage) => {
                 const paths = {
@@ -1751,7 +1881,7 @@
                 <div className="app">
                     {page === 'home' && <HomePage onNavigate={navigate} />}
                     {page === 'guide' && <GuidePage onNavigate={navigate} />}
-                    {page === 'play-ai' && <PlayAIPage onNavigate={navigate} />}
+                    {page === 'play-ai' && <PlayAIPage onNavigate={navigate} userId={userId} />}
                     {page === 'play-1v1' && <Play1v1Page onNavigate={navigate} playerId={playerId} onlineCount={onlineCount} />}
                     {page === 'admin' && <AdminPage onNavigate={navigate} />}
                 </div>

@@ -1,8 +1,12 @@
 import json
 import os
+from datetime import datetime, timezone, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
+
+# PST timezone (UTC-8)
+PST = timezone(timedelta(hours=-8))
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -55,7 +59,13 @@ class handler(BaseHTTPRequestHandler):
                     ts_str = ''
                     if timestamp:
                         try:
-                            ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
+                            # Convert to PST
+                            if hasattr(timestamp, 'astimezone'):
+                                pst_time = timestamp.astimezone(PST)
+                            else:
+                                # Assume UTC, convert to PST
+                                pst_time = timestamp.replace(tzinfo=timezone.utc).astimezone(PST)
+                            ts_str = pst_time.strftime('%Y-%m-%d %H:%M PST')
                         except:
                             ts_str = str(timestamp)
                     
@@ -65,7 +75,9 @@ class handler(BaseHTTPRequestHandler):
                         'turns': match.get('turns', 0),
                         'timestamp': ts_str,
                         'playerMoves': match.get('player_moves', []),
-                        'aiMoves': match.get('ai_moves', [])
+                        'aiMoves': match.get('ai_moves', []),
+                        'userId': match.get('user_id', 'N/A'),
+                        'modelId': match.get('model_id', 'A')
                     })
             except Exception as e:
                 print(f"AI games error: {e}")
@@ -117,7 +129,12 @@ class handler(BaseHTTPRequestHandler):
                                     ts_str = ''
                                     if timestamp:
                                         try:
-                                            ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
+                                            # Convert to PST
+                                            if hasattr(timestamp, 'astimezone'):
+                                                pst_time = timestamp.astimezone(PST)
+                                            else:
+                                                pst_time = timestamp.replace(tzinfo=timezone.utc).astimezone(PST)
+                                            ts_str = pst_time.strftime('%Y-%m-%d %H:%M PST')
                                         except:
                                             ts_str = str(timestamp)
                                     
@@ -147,7 +164,12 @@ class handler(BaseHTTPRequestHandler):
                         ts_str = ''
                         if timestamp:
                             try:
-                                ts_str = timestamp.strftime('%Y-%m-%d %H:%M')
+                                # Convert to PST
+                                if hasattr(timestamp, 'astimezone'):
+                                    pst_time = timestamp.astimezone(PST)
+                                else:
+                                    pst_time = timestamp.replace(tzinfo=timezone.utc).astimezone(PST)
+                                ts_str = pst_time.strftime('%Y-%m-%d %H:%M PST')
                             except:
                                 ts_str = str(timestamp)
                         
