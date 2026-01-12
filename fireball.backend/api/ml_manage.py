@@ -32,9 +32,9 @@ except:
     db = None
 
 # ============ CONFIG CONSTANTS ============
-TRAINING_ENABLED = False  # Master switch
+TRAINING_ENABLED = True  # Master switch
 GAMES_THRESHOLD_FOR_TRAINING = 200
-AB_TEST_GAMES_REQUIRED = 15
+AB_TEST_GAMES_REQUIRED = 20
 
 
 def get_ml_config():
