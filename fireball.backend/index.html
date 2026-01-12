@@ -1472,7 +1472,7 @@
                         </div>
                     )}
 
-                    {loading && (
+                    {loading && history.length === 0 && (
                         <>
                             <div className="loader"></div>
                             <p style={{ textAlign: 'center', color: 'var(--fire-orange)', marginTop: '0.5rem', fontSize: '0.9rem' }}>
