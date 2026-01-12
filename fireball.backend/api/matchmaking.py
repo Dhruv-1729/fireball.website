@@ -74,6 +74,8 @@ class handler(BaseHTTPRequestHandler):
                 result = self.get_game_state(data)
             elif action == 'leave_queue':
                 result = self.leave_queue(data)
+            elif action == 'terminate_match':
+                result = self.terminate_match(data)
             else:
                 result = {'error': 'Unknown action'}
 
@@ -334,3 +336,23 @@ class handler(BaseHTTPRequestHandler):
             doc.reference.delete()
 
         return {'status': 'left'}
+
+    def terminate_match(self, data):
+        match_id = data.get('matchId')
+        player_id = data.get('playerId')
+        reason = data.get('reason', 'terminated')
+
+        match_ref = db.collection('matches').document(match_id)
+        match_doc = match_ref.get()
+
+        if match_doc.exists:
+            match = match_doc.to_dict()
+            if match.get('status') == 'active':
+                match_ref.update({
+                    'status': reason,
+                    'terminated_at': firestore.SERVER_TIMESTAMP,
+                    'terminated_by': player_id
+                })
+                return {'status': 'terminated'}
+        
+        return {'status': 'already_ended'}

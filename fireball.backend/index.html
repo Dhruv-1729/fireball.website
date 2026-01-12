@@ -854,6 +854,147 @@
             );
         }
 
+        function WinRateChart({ mlStatus, chartTimeframe, setChartTimeframe }) {
+            const now = new Date();
+            const daysMap = { '1d': 1, '7d': 7, '30d': 30, '90d': 90, '6mo': 180 };
+            const days = daysMap[chartTimeframe] || 30;
+            const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+            const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+            const filteredData = mlStatus.historical_win_rates.filter(d => d.date >= cutoffStr);
+
+            if (filteredData.length === 0) {
+                return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No data for this timeframe</p>;
+            }
+
+            const latestRate = filteredData[filteredData.length - 1]?.winRate || 0;
+            const firstRate = filteredData[0]?.winRate || 0;
+            const change = latestRate - firstRate;
+            const isPositive = change >= 0;
+            const avgRate = filteredData.reduce((sum, d) => sum + d.winRate, 0) / filteredData.length;
+            const totalGames = filteredData.reduce((sum, d) => sum + d.total, 0);
+
+            const chartWidth = 750;
+            const chartHeight = 280;
+            const padding = { top: 40, right: 30, bottom: 50, left: 55 };
+            const innerWidth = chartWidth - padding.left - padding.right;
+            const innerHeight = chartHeight - padding.top - padding.bottom;
+
+            const maxRate = Math.min(100, Math.max(...filteredData.map(d => d.winRate)) + 10);
+            const minRate = Math.max(0, Math.min(...filteredData.map(d => d.winRate)) - 10);
+
+            const points = filteredData.map((d, i) => ({
+                x: padding.left + (i / Math.max(filteredData.length - 1, 1)) * innerWidth,
+                y: padding.top + innerHeight - ((d.winRate - minRate) / (maxRate - minRate || 1)) * innerHeight,
+                ...d
+            }));
+
+            const linePath = points.length > 1
+                ? points.reduce((acc, p, i, arr) => {
+                    if (i === 0) return `M ${p.x} ${p.y}`;
+                    const prev = arr[i - 1];
+                    const cpx = (prev.x + p.x) / 2;
+                    return `${acc} C ${cpx} ${prev.y}, ${cpx} ${p.y}, ${p.x} ${p.y}`;
+                }, '')
+                : `M ${points[0]?.x || 0} ${points[0]?.y || 0}`;
+
+            const areaPath = `${linePath} L ${points[points.length - 1]?.x || 0} ${chartHeight - padding.bottom} L ${padding.left} ${chartHeight - padding.bottom} Z`;
+
+            const lineColor = isPositive ? '#00C805' : '#FF5000';
+            const gradientId = `winRateGradient_${chartTimeframe}`;
+
+            return (
+                <div style={{ marginTop: '2rem' }}>
+                    <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: 'white' }}>{latestRate.toFixed(1)}%</span>
+                            <span style={{ fontSize: '1rem', color: lineColor, fontWeight: 500 }}>
+                                {isPositive ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
+                            </span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                            ML Win Rate • {totalGames} games played
+                        </div>
+                    </div>
+
+                    <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', padding: '1.5rem', position: 'relative' }}>
+                        <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor={lineColor} stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                                </linearGradient>
+                            </defs>
+
+                            {[0, 20, 40, 60, 80, 100].filter(v => v >= minRate && v <= maxRate).map(pct => {
+                                const y = padding.top + innerHeight - ((pct - minRate) / (maxRate - minRate || 1)) * innerHeight;
+                                return (
+                                    <g key={pct}>
+                                        <line x1={padding.left} y1={y} x2={chartWidth - padding.right} y2={y} stroke="rgba(255,255,255,0.1)" />
+                                        <text x={padding.left - 10} y={y + 4} fill="var(--text-muted)" fontSize="11" textAnchor="end">{pct}%</text>
+                                    </g>
+                                );
+                            })}
+
+                            {(() => {
+                                const avgY = padding.top + innerHeight - ((avgRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
+                                return (
+                                    <g>
+                                        <line x1={padding.left} y1={avgY} x2={chartWidth - padding.right} y2={avgY} stroke="var(--fire-orange)" strokeDasharray="6,4" strokeOpacity="0.6" />
+                                        <text x={chartWidth - padding.right + 8} y={avgY + 4} fill="var(--fire-orange)" fontSize="10">Avg</text>
+                                    </g>
+                                );
+                            })()}
+
+                            <path d={areaPath} fill={`url(#${gradientId})`} />
+                            <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinecap="round" />
+
+                            {points.map((p, i) => (
+                                <g key={i} style={{ cursor: 'pointer' }}>
+                                    <circle cx={p.x} cy={p.y} r="5" fill={lineColor} stroke="var(--bg-secondary)" strokeWidth="2" />
+                                    <title>{p.date}: {p.winRate}% win rate ({p.wins} wins / {p.total} games)</title>
+                                </g>
+                            ))}
+
+                            {(() => {
+                                const labelCount = Math.min(7, filteredData.length);
+                                const step = Math.max(1, Math.floor(filteredData.length / labelCount));
+                                return filteredData.filter((_, i) => i % step === 0 || i === filteredData.length - 1).map((d, idx) => {
+                                    const origIdx = filteredData.indexOf(d);
+                                    const x = points[origIdx]?.x || 0;
+                                    const dateStr = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                    return (
+                                        <text key={idx} x={x} y={chartHeight - 15} fill="var(--text-muted)" fontSize="11" textAnchor="middle">
+                                            {dateStr}
+                                        </text>
+                                    );
+                                });
+                            })()}
+                        </svg>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+                        {['1d', '7d', '30d', '90d', '6mo'].map(tf => (
+                            <button
+                                key={tf}
+                                onClick={() => setChartTimeframe(tf)}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.8rem',
+                                    fontWeight: chartTimeframe === tf ? 600 : 400,
+                                    background: chartTimeframe === tf ? 'var(--fire-orange)' : 'transparent',
+                                    border: chartTimeframe === tf ? 'none' : '1px solid var(--border-subtle)',
+                                    color: chartTimeframe === tf ? 'white' : 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    borderRadius: '20px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >{tf.toUpperCase()}</button>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
         function AdminPage({ onNavigate }) {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [password, setPassword] = useState('');
@@ -1037,158 +1178,9 @@
                                                 )}
 
                                                 {/* ML Win Rate Chart */}
-                                                {mlStatus.historical_win_rates && mlStatus.historical_win_rates.length > 0 && (() => {
-                                                    const now = new Date();
-                                                    const daysMap = { '1d': 1, '7d': 7, '30d': 30, '90d': 90, '6mo': 180 };
-                                                    const days = daysMap[chartTimeframe] || 30;
-                                                    const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-                                                    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
-                                                    const filteredData = mlStatus.historical_win_rates.filter(d => d.date >= cutoffStr);
-
-                                                    if (filteredData.length === 0) {
-                                                        return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No data for this timeframe</p>;
-                                                    }
-
-                                                    const latestRate = filteredData[filteredData.length - 1]?.winRate || 0;
-                                                    const firstRate = filteredData[0]?.winRate || 0;
-                                                    const change = latestRate - firstRate;
-                                                    const isPositive = change >= 0;
-                                                    const avgRate = filteredData.reduce((sum, d) => sum + d.winRate, 0) / filteredData.length;
-                                                    const totalGames = filteredData.reduce((sum, d) => sum + d.total, 0);
-
-                                                    const chartWidth = 750;
-                                                    const chartHeight = 280;
-                                                    const padding = { top: 40, right: 30, bottom: 50, left: 55 };
-                                                    const innerWidth = chartWidth - padding.left - padding.right;
-                                                    const innerHeight = chartHeight - padding.top - padding.bottom;
-
-                                                    const maxRate = Math.min(100, Math.max(...filteredData.map(d => d.winRate)) + 10);
-                                                    const minRate = Math.max(0, Math.min(...filteredData.map(d => d.winRate)) - 10);
-
-                                                    const points = filteredData.map((d, i) => ({
-                                                        x: padding.left + (i / Math.max(filteredData.length - 1, 1)) * innerWidth,
-                                                        y: padding.top + innerHeight - ((d.winRate - minRate) / (maxRate - minRate || 1)) * innerHeight,
-                                                        ...d
-                                                    }));
-
-                                                    // Smooth bezier curve path
-                                                    const linePath = points.length > 1
-                                                        ? points.reduce((acc, p, i, arr) => {
-                                                            if (i === 0) return `M ${p.x} ${p.y}`;
-                                                            const prev = arr[i - 1];
-                                                            const cpx = (prev.x + p.x) / 2;
-                                                            return `${acc} C ${cpx} ${prev.y}, ${cpx} ${p.y}, ${p.x} ${p.y}`;
-                                                        }, '')
-                                                        : `M ${points[0]?.x || 0} ${points[0]?.y || 0}`;
-
-                                                    // Gradient area path
-                                                    const areaPath = `${linePath} L ${points[points.length - 1]?.x || 0} ${chartHeight - padding.bottom} L ${padding.left} ${chartHeight - padding.bottom} Z`;
-
-                                                    const lineColor = isPositive ? '#00C805' : '#FF5000';
-                                                    const gradientId = `winRateGradient_${chartTimeframe}`;
-
-                                                    return (
-                                                        <div style={{ marginTop: '2rem' }}>
-                                                            {/* Header with current value */}
-                                                            <div style={{ marginBottom: '1rem' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-                                                                    <span style={{ fontSize: '2.5rem', fontWeight: 700, color: 'white' }}>{latestRate.toFixed(1)}%</span>
-                                                                    <span style={{ fontSize: '1rem', color: lineColor, fontWeight: 500 }}>
-                                                                        {isPositive ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
-                                                                    </span>
-                                                                </div>
-                                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                                                                    ML Win Rate • {totalGames} games played
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Chart */}
-                                                            <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', padding: '1.5rem', position: 'relative' }}>
-                                                                <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
-                                                                    <defs>
-                                                                        <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-                                                                            <stop offset="0%" stopColor={lineColor} stopOpacity="0.3" />
-                                                                            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-                                                                        </linearGradient>
-                                                                    </defs>
-
-                                                                    {/* Horizontal grid lines */}
-                                                                    {[0, 20, 40, 60, 80, 100].filter(v => v >= minRate && v <= maxRate).map(pct => {
-                                                                        const y = padding.top + innerHeight - ((pct - minRate) / (maxRate - minRate || 1)) * innerHeight;
-                                                                        return (
-                                                                            <g key={pct}>
-                                                                                <line x1={padding.left} y1={y} x2={chartWidth - padding.right} y2={y} stroke="rgba(255,255,255,0.1)" />
-                                                                                <text x={padding.left - 10} y={y + 4} fill="var(--text-muted)" fontSize="11" textAnchor="end">{pct}%</text>
-                                                                            </g>
-                                                                        );
-                                                                    })}
-
-                                                                    {/* Average reference line */}
-                                                                    {(() => {
-                                                                        const avgY = padding.top + innerHeight - ((avgRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
-                                                                        return (
-                                                                            <>
-                                                                                <line x1={padding.left} y1={avgY} x2={chartWidth - padding.right} y2={avgY} stroke="var(--fire-orange)" strokeDasharray="6,4" strokeOpacity="0.6" />
-                                                                                <text x={chartWidth - padding.right + 8} y={avgY + 4} fill="var(--fire-orange)" fontSize="10">Avg</text>
-                                                                            </>
-                                                                        );
-                                                                    })()}
-
-                                                                    {/* Gradient fill area */}
-                                                                    <path d={areaPath} fill={`url(#${gradientId})`} />
-
-                                                                    {/* Main line */}
-                                                                    <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinecap="round" />
-
-                                                                    {/* Data points with hover */}
-                                                                    {points.map((p, i) => (
-                                                                        <g key={i} style={{ cursor: 'pointer' }}>
-                                                                            <circle cx={p.x} cy={p.y} r="5" fill={lineColor} stroke="var(--bg-secondary)" strokeWidth="2" />
-                                                                            <title>{p.date}: {p.winRate}% win rate ({p.wins} wins / {p.total} games)</title>
-                                                                        </g>
-                                                                    ))}
-
-                                                                    {/* X-axis labels */}
-                                                                    {(() => {
-                                                                        const labelCount = Math.min(7, filteredData.length);
-                                                                        const step = Math.max(1, Math.floor(filteredData.length / labelCount));
-                                                                        return filteredData.filter((_, i) => i % step === 0 || i === filteredData.length - 1).map((d, idx) => {
-                                                                            const origIdx = filteredData.indexOf(d);
-                                                                            const x = points[origIdx]?.x || 0;
-                                                                            const dateStr = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                                                            return (
-                                                                                <text key={idx} x={x} y={chartHeight - 15} fill="var(--text-muted)" fontSize="11" textAnchor="middle">
-                                                                                    {dateStr}
-                                                                                </text>
-                                                                            );
-                                                                        });
-                                                                    })()}
-                                                                </svg>
-                                                            </div>
-
-                                                            {/* Timeframe buttons - pill style */}
-                                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
-                                                                {['1d', '7d', '30d', '90d', '6mo'].map(tf => (
-                                                                    <button
-                                                                        key={tf}
-                                                                        onClick={() => setChartTimeframe(tf)}
-                                                                        style={{
-                                                                            padding: '0.5rem 1rem',
-                                                                            fontSize: '0.8rem',
-                                                                            fontWeight: chartTimeframe === tf ? 600 : 400,
-                                                                            background: chartTimeframe === tf ? 'var(--fire-orange)' : 'transparent',
-                                                                            border: chartTimeframe === tf ? 'none' : '1px solid var(--border-subtle)',
-                                                                            color: chartTimeframe === tf ? 'white' : 'var(--text-secondary)',
-                                                                            cursor: 'pointer',
-                                                                            borderRadius: '20px',
-                                                                            transition: 'all 0.2s ease'
-                                                                        }}
-                                                                    >{tf.toUpperCase()}</button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
+                                                {mlStatus.historical_win_rates && mlStatus.historical_win_rates.length > 0 ? (
+                                                    <WinRateChart mlStatus={mlStatus} chartTimeframe={chartTimeframe} setChartTimeframe={setChartTimeframe} />
+                                                ) : null}
                                             </div>
                                         ) : (
                                             <p style={{ color: 'var(--text-muted)' }}>ML status not available. The /api/ml_manage endpoint may not be deployed.</p>
@@ -1392,8 +1384,8 @@
                             playerMove: move,
                             playerCharges: game.playerCharges,
                             aiCharges: game.aiCharges,
-                            moveHistory: history.map(h => h.player),
-                            oppMoveHistory: history.map(h => h.ai),
+                            moveHistory: [...history].reverse().map(h => h.player),
+                            oppMoveHistory: [...history].reverse().map(h => h.ai),
                             userId: userId
                         })
                     });
@@ -1547,6 +1539,17 @@
                         clearInterval(checkTimeout);
                         if (pollInterval) clearInterval(pollInterval);
                         setStatus('disconnected');
+                        // Notify backend that match is terminated
+                        fetch('/api/matchmaking', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: 'terminate_match',
+                                matchId: matchId,
+                                playerId: playerId,
+                                reason: 'disconnected'
+                            })
+                        }).catch(e => console.error('Failed to notify termination:', e));
                     }
                 }, 1000);
 
@@ -1767,8 +1770,8 @@
 
                     {status === 'disconnected' && (
                         <div className="disconnected-overlay">
-                            <h2>Opponent Disconnected</h2>
-                            <p>Your opponent took too long to respond and the match has been ended.</p>
+                            <h2>Opponent Disconnected :&#40;</h2>
+                            <p>Your opponent took too long to respond and the match has been terminated.</p>
                             <button className="btn btn-primary" onClick={resetMatch}>Find New Match</button>
                         </div>
                     )}
@@ -1901,9 +1904,9 @@
                 return () => window.removeEventListener('popstate', handlePopState);
             }, []);
 
-            // Heartbeat for online players tracking (only on play-1v1 page)
+            // Heartbeat for online players tracking (on all pages except admin)
             useEffect(() => {
-                if (page !== 'play-1v1') return;
+                if (page === 'admin') return;
 
                 const sendHeartbeat = async () => {
                     try {
