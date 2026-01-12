@@ -788,7 +788,7 @@
         const { createRoot } = ReactDOM;
 
         // MAINTENANCE MODE - Set to true to enable maintenance mode
-        const MAINTENANCE_MODE = true;
+        const MAINTENANCE_MODE = false;
 
         const ADMIN_HASH = '5b96b26ffce0654ba66f5dca12b86c0f70308d53e1af0e3a62b5bc3eaa501e0e';
 
@@ -844,7 +844,8 @@
                         color: 'white',
                         fontSize: '1.5rem',
                         maxWidth: '600px',
-                        lineHeight: '1.8'
+                        lineHeight: '1.8',
+                        whiteSpace: 'pre-wrap'
                     }}>
                         Site undergoing temporary maintenance. Please check back later.
                     </p>
@@ -1964,10 +1965,9 @@
                 return () => clearInterval(interval);
             }, [playerId, page]);
 
-            // Check maintenance mode first
-            if (MAINTENANCE_MODE) {
+            // Check maintenance mode first (allow admin to still access dashboard)
+            if (MAINTENANCE_MODE && page !== 'admin') {
                 return <MaintenancePage />;
-                { page === 'admin' && <AdminPage onNavigate={navigate} /> }
             }
 
             return (

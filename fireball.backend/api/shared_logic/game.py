@@ -27,6 +27,7 @@ class FireballQLearning:
         if charges >= 2: moves.append("iceball")
         if charges >= 5: moves.append("megaball")
         return moves
+    
 
     def choose_action(self, state, legal_moves, training=True):
         if training and random.random() < self.epsilon:

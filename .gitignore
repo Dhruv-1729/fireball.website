@@ -24,3 +24,4 @@ venv/
 #firebase
 *firebase*.json
 *service-account*.json
+.vercel

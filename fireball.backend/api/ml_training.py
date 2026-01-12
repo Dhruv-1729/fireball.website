@@ -20,9 +20,7 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# ============================================================
-# MASTER SWITCH - SET TO FALSE TO DISABLE ALL TRAINING
-# ============================================================
+
 TRAINING_ENABLED = False
 
 # Training will only trigger after this many games since last training
