@@ -846,7 +846,7 @@
                         maxWidth: '600px',
                         lineHeight: '1.8'
                     }}>
-                        Site undergoing temporary maintainence. Please check back later.
+                        Site undergoing temporary maintenance. Please check back later.
                     </p>
                 </div>
             );
@@ -1967,6 +1967,7 @@
             // Check maintenance mode first
             if (MAINTENANCE_MODE) {
                 return <MaintenancePage />;
+                { page === 'admin' && <AdminPage onNavigate={navigate} /> }
             }
 
             return (
