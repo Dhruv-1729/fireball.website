@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 from datetime import datetime, timezone, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -23,15 +24,60 @@ except:
     db = None
 
 
+def verify_admin_token(token):
+    """Verify an admin session token."""
+    if not db or not token:
+        return False
+    
+    try:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        doc = db.collection('admin_sessions').document(token_hash).get()
+        
+        if not doc.exists:
+            return False
+        
+        session = doc.to_dict()
+        
+        if not session.get('valid', False):
+            return False
+        
+        # Check expiry
+        expires_at = session.get('expires_at')
+        if expires_at:
+            if hasattr(expires_at, 'timestamp'):
+                if datetime.now(timezone.utc).timestamp() > expires_at.timestamp():
+                    return False
+            elif isinstance(expires_at, datetime):
+                if datetime.now(timezone.utc) > expires_at.replace(tzinfo=timezone.utc):
+                    return False
+        
+        return True
+    except Exception as e:
+        print(f"Error verifying token: {e}")
+        return False
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.end_headers()
 
     def do_GET(self):
+        # Verify admin token
+        auth_header = self.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else ''
+        
+        if not verify_admin_token(token):
+            self.send_response(401)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Unauthorized. Valid admin token required."}).encode())
+            return
+        
         if not db:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')

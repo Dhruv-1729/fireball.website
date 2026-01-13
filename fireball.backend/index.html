@@ -782,16 +782,16 @@
 
 <body>
     <div id="root"></div>
-    
+
 
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
         const { createRoot } = ReactDOM;
 
-        // MAINTENANCE MODE - Set to true to enable maintenance mode
-        const MAINTENANCE_MODE = false;
-
-        const ADMIN_HASH = 'fa20e43cc591ce0772b90d46509f5ed031276dfe381de73c9b2089c1c29f5072';
+        // Admin token stored in sessionStorage (not exposed in JS variables)
+        const getAdminToken = () => sessionStorage.getItem('fireball_admin_token');
+        const setAdminToken = (token) => sessionStorage.setItem('fireball_admin_token', token);
+        const clearAdminToken = () => sessionStorage.removeItem('fireball_admin_token');
 
         const MOVES = [
             { id: 'charge', name: 'Charge', cost: 0, costDisplay: '+1' },
@@ -825,7 +825,7 @@
             return userId;
         }
 
-        function MaintenancePage() {
+        function MaintenancePage({ message }) {
             return (
                 <div style={{
                     minHeight: '100vh',
@@ -848,7 +848,7 @@
                         lineHeight: '1.8',
                         whiteSpace: 'pre-wrap'
                     }}>
-                        Site undergoing temporary maintenance. Please check back later.
+                        {message || 'Site undergoing temporary maintenance. Please check back later.'}
                     </p>
                 </div>
             );
@@ -860,7 +860,7 @@
                     <div className="home-header">
                         <img src="/fireball_logo.png" alt="Fireball" className="home-logo" />
                         <h1 className="home-title">Fireball</h1>
-                        <p className="home-subtitle">Strategic game powered by machine learning</p>
+                        <p className="home-subtitle">A fun, strategic, and fast-paced game</p>
                     </div>
 
                     <div className="home-grid">
@@ -1030,29 +1030,111 @@
 
         function AdminPage({ onNavigate }) {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [isCheckingAuth, setIsCheckingAuth] = useState(true);
             const [password, setPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
             const [stats, setStats] = useState(null);
             const [mlStatus, setMlStatus] = useState(null);
             const [loading, setLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('overview');
             const [chartTimeframe, setChartTimeframe] = useState('30d');
+            const [maintenanceMode, setMaintenanceMode] = useState(false);
+            const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+
+            // Check if we have a valid token on mount
+            useEffect(() => {
+                const checkAuth = async () => {
+                    const token = getAdminToken();
+                    if (!token) {
+                        setIsCheckingAuth(false);
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch('/api/auth?action=verify', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        const data = await res.json();
+
+                        if (data.valid) {
+                            setIsAuthenticated(true);
+                            fetchStats();
+                            fetchMlStatus();
+                            fetchMaintenanceStatus();
+                        } else {
+                            clearAdminToken();
+                        }
+                    } catch (e) {
+                        clearAdminToken();
+                    }
+                    setIsCheckingAuth(false);
+                };
+
+                checkAuth();
+            }, []);
 
             const handleLogin = async () => {
+                setLoginError('');
+
+                // Hash password client-side using SHA-256
                 const hash = await sha256(password);
-                if (hash === ADMIN_HASH) {
-                    setIsAuthenticated(true);
-                    fetchStats();
-                    fetchMlStatus();
-                } else {
-                    alert('Incorrect password');
+
+                try {
+                    const res = await fetch('/api/auth?action=login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ passwordHash: hash })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.success && data.token) {
+                        setAdminToken(data.token);
+                        setIsAuthenticated(true);
+                        setPassword('');
+                        fetchStats();
+                        fetchMlStatus();
+                        fetchMaintenanceStatus();
+                    } else {
+                        setLoginError(data.error || 'Incorrect password');
+                    }
+                } catch (e) {
+                    setLoginError('Failed to connect to server');
                 }
-                setPassword('');
+            };
+
+            const handleLogout = async () => {
+                const token = getAdminToken();
+                if (token) {
+                    await fetch('/api/auth?action=logout', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+                clearAdminToken();
+                setIsAuthenticated(false);
+                setStats(null);
+                setMlStatus(null);
             };
 
             const fetchStats = async () => {
                 setLoading(true);
                 try {
-                    const res = await fetch('/api/stats');
+                    const token = getAdminToken();
+                    const res = await fetch('/api/stats', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (res.status === 401) {
+                        clearAdminToken();
+                        setIsAuthenticated(false);
+                        return;
+                    }
+
                     const data = await res.json();
                     setStats(data);
                 } catch (e) {
@@ -1063,7 +1145,10 @@
 
             const fetchMlStatus = async () => {
                 try {
-                    const res = await fetch('/api/ml_manage');
+                    const token = getAdminToken();
+                    const res = await fetch('/api/ml_manage', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
                     const data = await res.json();
                     setMlStatus(data);
                 } catch (e) {
@@ -1071,11 +1156,50 @@
                 }
             };
 
+            const fetchMaintenanceStatus = async () => {
+                try {
+                    const res = await fetch('/api/auth?action=config');
+                    const data = await res.json();
+                    setMaintenanceMode(data.maintenance_mode || false);
+                } catch (e) {
+                    console.log('Failed to fetch maintenance status');
+                }
+            };
+
+            const toggleMaintenanceMode = async () => {
+                setMaintenanceLoading(true);
+                try {
+                    const token = getAdminToken();
+                    const res = await fetch('/api/auth?action=set_maintenance', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ enabled: !maintenanceMode })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        setMaintenanceMode(!maintenanceMode);
+                    } else {
+                        alert(data.error || 'Failed to toggle maintenance mode');
+                    }
+                } catch (e) {
+                    alert('Failed to connect to server');
+                }
+                setMaintenanceLoading(false);
+            };
+
             const uploadOriginalModel = async () => {
                 try {
+                    const token = getAdminToken();
                     const res = await fetch('/api/ml_manage', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: JSON.stringify({ action: 'upload_original' })
                     });
                     const data = await res.json();
@@ -1085,6 +1209,21 @@
                     alert('Failed to upload model');
                 }
             };
+
+            if (isCheckingAuth) {
+                return (
+                    <div className="game-container">
+                        <div className="game-header">
+                            <img src="/fireball_logo.png" alt="" className="game-logo" />
+                            <h1 className="game-title">Admin Panel</h1>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '3rem' }}>
+                            <div className="loader"></div>
+                            <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Checking authentication...</p>
+                        </div>
+                    </div>
+                );
+            }
 
             if (!isAuthenticated) {
                 return (
@@ -1096,6 +1235,11 @@
                         </div>
                         <div className="matchmaking-status">
                             <p>Enter admin password to continue</p>
+                            {loginError && (
+                                <div className="alert" style={{ marginBottom: '1rem', maxWidth: '300px', margin: '0 auto 1rem' }}>
+                                    {loginError}
+                                </div>
+                            )}
                             <input
                                 type="password"
                                 className="input-field"
@@ -1116,8 +1260,34 @@
                     <div className="game-header">
                         <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => onNavigate('home')} />
                         <h1 className="game-title">Admin Dashboard</h1>
-                        <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <button className="back-btn" onClick={handleLogout} style={{ color: '#fca5a5' }}>Logout</button>
+                            <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
+                        </div>
                     </div>
+
+                    {/* Maintenance Mode Banner */}
+                    {maintenanceMode && (
+                        <div style={{
+                            background: 'rgba(220, 38, 38, 0.15)',
+                            border: '1px solid rgba(220, 38, 38, 0.3)',
+                            padding: '0.75rem 1rem',
+                            marginBottom: '1.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <span style={{ color: '#fca5a5' }}>⚠️ Maintenance Mode is ON - Users cannot access the site</span>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={toggleMaintenanceMode}
+                                disabled={maintenanceLoading}
+                                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            >
+                                {maintenanceLoading ? 'Updating...' : 'Disable'}
+                            </button>
+                        </div>
+                    )}
 
                     {loading ? (
                         <div style={{ textAlign: 'center', padding: '3rem' }}>
@@ -1142,7 +1312,47 @@
                                     className={`btn ${activeTab === 'ml-status' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => { setActiveTab('ml-status'); fetchMlStatus(); }}
                                 >ML Status</button>
+                                <button
+                                    className={`btn ${activeTab === 'settings' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setActiveTab('settings')}
+                                >⚙️ Settings</button>
                             </div>
+
+                            {activeTab === 'settings' && (
+                                <div style={{ display: 'grid', gap: '1.5rem' }}>
+                                    <div className="home-card" style={{ cursor: 'default', padding: '1.5rem' }}>
+                                        <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>Site Settings</h3>
+                                        <div style={{ display: 'grid', gap: '1rem' }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                padding: '1rem',
+                                                background: 'var(--bg-secondary)',
+                                                borderRadius: '8px'
+                                            }}>
+                                                <div>
+                                                    <strong style={{ color: 'var(--text-primary)' }}>Maintenance Mode</strong>
+                                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                                                        When enabled, users will see a maintenance page instead of the game.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    className={`btn ${maintenanceMode ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={toggleMaintenanceMode}
+                                                    disabled={maintenanceLoading}
+                                                    style={{
+                                                        minWidth: '100px',
+                                                        background: maintenanceMode ? '#dc2626' : undefined
+                                                    }}
+                                                >
+                                                    {maintenanceLoading ? '...' : (maintenanceMode ? 'ON' : 'OFF')}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {activeTab === 'ml-status' && (
                                 <div style={{ display: 'grid', gap: '1.5rem' }}>
@@ -1379,14 +1589,14 @@
                         <h3>Strategy Tips</h3>
                         <p>
                             The game is all about reading the patterns your opponent makes. If they just used their last charge on an attack,
-                            they will probably need to charge again - perfect time for a Fireball. If you have been
+                            they will probably need to charge again; perfect time for a Fireball. If you have been
                             charging a lot, they might expect an attack and Shield, so maybe charge one more time.
                         </p>
 
                         <h3>Playing the AI</h3>
                         <p>
                             The ML model has been trained on thousands of games using different algorithms.
-                            It learns patterns and will adapt to predictable play. Mix up your strategy to keep it guessing.
+                            It learns patterns and will adapt to predictable play. Mix up your strategy and try to win!.
                         </p>
 
                         <button className="btn btn-primary" onClick={() => onNavigate('play-ai')} style={{ marginTop: '2rem' }}>
@@ -1398,34 +1608,90 @@
         }
 
         function PlayAIPage({ onNavigate, userId }) {
+            const [sessionId, setSessionId] = useState(null);
             const [game, setGame] = useState({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
             const [history, setHistory] = useState([]);
             const [loading, setLoading] = useState(false);
+            const [initializing, setInitializing] = useState(true);
             const [error, setError] = useState(null);
+
+            // Start a new game session on mount
+            useEffect(() => {
+                startNewSession();
+            }, []);
+
+            const startNewSession = async () => {
+                setInitializing(true);
+                setError(null);
+
+                try {
+                    const res = await fetch('/api/game_session?action=start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId })
+                    });
+
+                    if (!res.ok) throw new Error('Failed to start session');
+
+                    const data = await res.json();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    setSessionId(data.sessionId);
+                    setGame({
+                        playerCharges: data.playerCharges,
+                        aiCharges: data.aiCharges,
+                        gameOver: false,
+                        winner: null
+                    });
+                    setHistory([]);
+                } catch (e) {
+                    setError('Failed to start game. Please try again.');
+                }
+
+                setInitializing(false);
+            };
 
             const legalMoves = getLegalMoves(game.playerCharges);
 
             const handleMove = async (move) => {
+                if (!sessionId) {
+                    setError('No active session. Please refresh the page.');
+                    return;
+                }
+
                 setLoading(true);
                 setError(null);
 
                 try {
-                    const res = await fetch('/api/play_ai', {
+                    const res = await fetch('/api/game_session?action=move', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            playerMove: move,
-                            playerCharges: game.playerCharges,
-                            aiCharges: game.aiCharges,
-                            moveHistory: [...history].reverse().map(h => h.player),
-                            oppMoveHistory: [...history].reverse().map(h => h.ai),
-                            userId: userId
+                            sessionId,
+                            move
                         })
                     });
 
                     if (!res.ok) throw new Error('Request failed');
 
                     const data = await res.json();
+
+                    if (data.error) {
+                        // If session expired/not found, prompt to restart
+                        if (data.error.includes('Session') || data.error.includes('expired')) {
+                            setError('Session expired. Starting a new game...');
+                            setTimeout(() => startNewSession(), 1500);
+                        } else if (data.error.includes('Illegal move')) {
+                            setError(data.error);
+                        } else {
+                            throw new Error(data.error);
+                        }
+                        setLoading(false);
+                        return;
+                    }
 
                     setGame({
                         playerCharges: data.playerCharges,
@@ -1443,10 +1709,26 @@
             };
 
             const resetGame = () => {
-                setGame({ playerCharges: 0, aiCharges: 0, gameOver: false, winner: null });
-                setHistory([]);
-                setError(null);
+                startNewSession();
             };
+
+            if (initializing) {
+                return (
+                    <div className="game-container">
+                        <div className="game-header">
+                            <img src="/fireball_logo.png" alt="" className="game-logo" onClick={() => onNavigate('home')} />
+                            <h1 className="game-title">vs ML Model</h1>
+                            <button className="back-btn" onClick={() => onNavigate('home')}>Back</button>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '3rem' }}>
+                            <div className="loader"></div>
+                            <p style={{ color: 'var(--fire-orange)', marginTop: '1rem', fontSize: '0.9rem' }}>
+                                Starting game session...
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <div className="game-container">
@@ -1501,7 +1783,7 @@
                         <>
                             <div className="loader"></div>
                             <p style={{ textAlign: 'center', color: 'var(--fire-orange)', marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                                Fetching model...
+                                Processing move...
                             </p>
                         </>
                     )}
@@ -1900,6 +2182,9 @@
 
             const [page, setPage] = useState(getPageFromUrl());
             const [onlineCount, setOnlineCount] = useState(0);
+            const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+            const [maintenanceMessage, setMaintenanceMessage] = useState('');
+            const [checkingMaintenance, setCheckingMaintenance] = useState(true);
 
             // Use sessionStorage for per-tab playerId (allows testing matchmaking in multiple tabs)
             // Each tab gets a unique session ID for matchmaking purposes
@@ -1914,6 +2199,24 @@
 
             // Persistent userId for tracking unique browsers (survives browser close)
             const [userId] = useState(() => getOrCreateUserId());
+
+            // Check maintenance mode on startup
+            useEffect(() => {
+                const checkMaintenance = async () => {
+                    try {
+                        const res = await fetch('/api/auth?action=config');
+                        const data = await res.json();
+                        setIsMaintenanceMode(data.maintenance_mode || false);
+                        setMaintenanceMessage(data.maintenance_message || 'Site undergoing temporary maintenance. Please check back later.');
+                    } catch (e) {
+                        // If we can't reach the server, don't block users
+                        console.log('Could not check maintenance status');
+                    }
+                    setCheckingMaintenance(false);
+                };
+
+                checkMaintenance();
+            }, []);
 
             // URL routing
             const navigate = (newPage) => {
@@ -1939,7 +2242,7 @@
 
             // Heartbeat for online players tracking (on all pages except admin)
             useEffect(() => {
-                if (page === 'admin') return;
+                if (page === 'admin' || isMaintenanceMode) return;
 
                 const sendHeartbeat = async () => {
                     try {
@@ -1964,11 +2267,20 @@
                 sendHeartbeat();
                 const interval = setInterval(sendHeartbeat, 5000);
                 return () => clearInterval(interval);
-            }, [playerId, page]);
+            }, [playerId, page, isMaintenanceMode]);
+
+            // Show loading while checking maintenance
+            if (checkingMaintenance) {
+                return (
+                    <div className="app" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+                        <div className="loader"></div>
+                    </div>
+                );
+            }
 
             // Check maintenance mode first (allow admin to still access dashboard)
-            if (MAINTENANCE_MODE && page !== 'admin') {
-                return <MaintenancePage />;
+            if (isMaintenanceMode && page !== 'admin') {
+                return <MaintenancePage message={maintenanceMessage} />;
             }
 
             return (
