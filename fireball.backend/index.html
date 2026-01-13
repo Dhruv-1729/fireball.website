@@ -899,12 +899,26 @@
                 return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No data for this timeframe</p>;
             }
 
-            const latestRate = filteredData[filteredData.length - 1]?.winRate || 0;
-            const firstRate = filteredData[0]?.winRate || 0;
-            const change = latestRate - firstRate;
-            const isPositive = change >= 0;
-            const avgRate = filteredData.reduce((sum, d) => sum + d.winRate, 0) / filteredData.length;
+            // Calculate overall stats from the filtered data
             const totalGames = filteredData.reduce((sum, d) => sum + d.total, 0);
+            const totalWins = filteredData.reduce((sum, d) => sum + d.wins, 0);
+            const overallWinRate = totalGames > 0 ? (totalWins / totalGames * 100) : 0;
+
+            // For trend calculation: compare first half vs second half of period
+            const midpoint = Math.floor(filteredData.length / 2);
+            const firstHalf = filteredData.slice(0, midpoint);
+            const secondHalf = filteredData.slice(midpoint);
+
+            const firstHalfGames = firstHalf.reduce((sum, d) => sum + d.total, 0);
+            const firstHalfWins = firstHalf.reduce((sum, d) => sum + d.wins, 0);
+            const firstHalfRate = firstHalfGames > 0 ? (firstHalfWins / firstHalfGames * 100) : 0;
+
+            const secondHalfGames = secondHalf.reduce((sum, d) => sum + d.total, 0);
+            const secondHalfWins = secondHalf.reduce((sum, d) => sum + d.wins, 0);
+            const secondHalfRate = secondHalfGames > 0 ? (secondHalfWins / secondHalfGames * 100) : 0;
+
+            const trend = secondHalfRate - firstHalfRate;
+            const isPositive = trend >= 0;
 
             const chartWidth = 750;
             const chartHeight = 280;
@@ -932,24 +946,64 @@
 
             const areaPath = `${linePath} L ${points[points.length - 1]?.x || 0} ${chartHeight - padding.bottom} L ${padding.left} ${chartHeight - padding.bottom} Z`;
 
-            const lineColor = isPositive ? '#00C805' : '#FF5000';
+            const lineColor = '#00C805';
             const gradientId = `winRateGradient_${chartTimeframe}`;
 
             return (
                 <div style={{ marginTop: '2rem' }}>
-                    <div style={{ marginBottom: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-                            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: 'white' }}>{latestRate.toFixed(1)}%</span>
-                            <span style={{ fontSize: '1rem', color: lineColor, fontWeight: 500 }}>
-                                {isPositive ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
-                            </span>
+                    {/* Header Stats */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '1rem',
+                        marginBottom: '1.5rem',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        padding: '1rem'
+                    }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
+                                {overallWinRate.toFixed(1)}%
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                                Overall Win Rate
+                            </div>
                         </div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                            ML Win Rate • {totalGames} games played
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
+                                {totalGames}
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                                Games Played
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
+                                {totalWins}
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                                AI Wins
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{
+                                fontSize: '1.75rem',
+                                fontWeight: 700,
+                                color: isPositive ? '#22c55e' : '#ef4444'
+                            }}>
+                                {isPositive ? '+' : ''}{trend.toFixed(1)}%
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                                Trend
+                            </div>
                         </div>
                     </div>
 
+                    {/* Chart Area */}
                     <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', padding: '1.5rem', position: 'relative' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                            Daily Win Rate
+                        </div>
                         <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
                             <defs>
                                 <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -968,8 +1022,9 @@
                                 );
                             })}
 
+                            {/* Average line */}
                             {(() => {
-                                const avgY = padding.top + innerHeight - ((avgRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
+                                const avgY = padding.top + innerHeight - ((overallWinRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
                                 return (
                                     <g>
                                         <line x1={padding.left} y1={avgY} x2={chartWidth - padding.right} y2={avgY} stroke="var(--fire-orange)" strokeDasharray="6,4" strokeOpacity="0.6" />
@@ -1005,6 +1060,7 @@
                         </svg>
                     </div>
 
+                    {/* Timeframe Selector */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
                         {['1d', '7d', '30d', '90d', '6mo'].map(tf => (
                             <button
@@ -1277,7 +1333,7 @@
                             alignItems: 'center',
                             justifyContent: 'space-between'
                         }}>
-                            <span style={{ color: '#fca5a5' }}>⚠️ Maintenance Mode is ON - Users cannot access the site</span>
+                            <span style={{ color: '#fca5a5' }}>Maintenance Mode is ON - Users cannot access the site</span>
                             <button
                                 className="btn btn-secondary"
                                 onClick={toggleMaintenanceMode}
@@ -1315,7 +1371,7 @@
                                 <button
                                     className={`btn ${activeTab === 'settings' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('settings')}
-                                >⚙️ Settings</button>
+                                >Settings</button>
                             </div>
 
                             {activeTab === 'settings' && (
@@ -1363,7 +1419,7 @@
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                     <span>Training Enabled:</span>
                                                     <span style={{ color: mlStatus.master_switch ? 'var(--success-green)' : 'var(--text-muted)' }}>
-                                                        {mlStatus.master_switch ? '✓ Yes' : '✗ No (disabled in code)'}
+                                                        {mlStatus.master_switch ? 'Yes' : 'No (disabled in code)'}
                                                     </span>
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1377,7 +1433,7 @@
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                     <span>A/B Test Active:</span>
                                                     <span style={{ color: mlStatus.config?.ab_test_active ? 'var(--fire-orange)' : 'var(--text-muted)' }}>
-                                                        {mlStatus.config?.ab_test_active ? '✓ Yes' : '✗ No'}
+                                                        {mlStatus.config?.ab_test_active ? 'Yes' : 'No'}
                                                     </span>
                                                 </div>
                                                 {mlStatus.config?.ab_test_active && (
@@ -1405,14 +1461,33 @@
                                                         </div>
                                                     </>
                                                 )}
-                                                <div style={{ marginTop: '1rem' }}>
-                                                    <h4>Training Data Available:</h4>
-                                                    <ul style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
-                                                        <li>AI vs Human Games: {mlStatus.training_data?.ai_vs_human_games || 0}</li>
-                                                        <li>AI Win Rate: {mlStatus.training_data?.ai_win_rate || 0}%</li>
-                                                        <li>Online Games: {mlStatus.training_data?.online_games || 0}</li>
-                                                        <li>Total: {mlStatus.training_data?.total_games || 0}</li>
-                                                    </ul>
+                                                <div style={{ marginTop: '1.5rem' }}>
+                                                    <h4 style={{ marginBottom: '0.75rem' }}>Training Data Available</h4>
+                                                    <div style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(2, 1fr)',
+                                                        gap: '0.5rem',
+                                                        background: 'var(--bg-secondary)',
+                                                        padding: '1rem',
+                                                        borderRadius: '8px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>AI vs Human Games</span>
+                                                            <span>{mlStatus.training_data?.ai_vs_human_games || 0}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>AI Win Rate</span>
+                                                            <span>{mlStatus.training_data?.ai_win_rate || 0}%</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>Online Games</span>
+                                                            <span>{mlStatus.training_data?.online_games || 0}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>Total</span>
+                                                            <span>{mlStatus.training_data?.total_games || 0}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 {!mlStatus.config?.current_model && (
                                                     <button className="btn btn-primary" onClick={uploadOriginalModel} style={{ marginTop: '1rem' }}>

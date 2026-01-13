@@ -374,6 +374,37 @@ def cleanup_old_sessions():
         return 0
 
 
+def track_unique_visitor(user_id):
+    """
+    Track a unique visitor. Only called when a real game session starts.
+    This filters out bots since they don't actually play games.
+    """
+    if not db or not user_id or user_id == 'anonymous':
+        return
+    
+    try:
+        # Use userId as document ID to ensure uniqueness
+        doc_ref = db.collection('unique_visitors').document(user_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            # New unique visitor
+            doc_ref.set({
+                'user_id': user_id,
+                'first_seen': firestore.SERVER_TIMESTAMP,
+                'last_seen': firestore.SERVER_TIMESTAMP,
+                'games_played': 1
+            })
+        else:
+            # Returning visitor - update last seen and increment games
+            doc_ref.update({
+                'last_seen': firestore.SERVER_TIMESTAMP,
+                'games_played': firestore.Increment(1)
+            })
+    except Exception as e:
+        print(f"Error tracking visitor: {e}")
+
+
 def create_game_session(user_id):
     """Create a new server-authoritative game session."""
     if not db:
@@ -382,6 +413,9 @@ def create_game_session(user_id):
     # Probabilistically cleanup old sessions (1 in 10 requests)
     if random.random() < 0.1:
         cleanup_old_sessions()
+    
+    # Track unique visitor (only users who actually play are counted)
+    track_unique_visitor(user_id)
     
     session_id = str(uuid.uuid4())
     model, model_id, model_version = get_model_for_game()
