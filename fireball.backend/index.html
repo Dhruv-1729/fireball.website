@@ -1284,7 +1284,7 @@
             const [chartTimeframe, setChartTimeframe] = useState('30d');
             const [maintenanceMode, setMaintenanceMode] = useState(false);
             const [maintenanceLoading, setMaintenanceLoading] = useState(false);
-            const [lastRefresh, setLastRefresh] = useState(null);
+
 
             // Check if we have a valid token on mount
             useEffect(() => {
@@ -1321,24 +1321,6 @@
 
                 checkAuth();
             }, []);
-
-            // Auto-refresh stats every 10 seconds when authenticated and on overview tab
-            useEffect(() => {
-                if (!isAuthenticated) return;
-
-                // Initial fetch if not already loaded
-                if (!stats) {
-                    fetchStats();
-                }
-
-                const refreshInterval = setInterval(() => {
-                    if (activeTab === 'overview') {
-                        fetchStats();
-                    }
-                }, 10000);
-
-                return () => clearInterval(refreshInterval);
-            }, [isAuthenticated, activeTab]);
 
             const handleLogin = async () => {
                 setLoginError('');
@@ -1400,7 +1382,6 @@
 
                     const data = await res.json();
                     setStats(data);
-                    setLastRefresh(new Date());
                 } catch (e) {
                     setStats({ error: 'Failed to load stats' });
                 }
@@ -1717,36 +1698,9 @@
 
                             {activeTab === 'overview' && (
                                 <>
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        marginBottom: '1rem',
-                                        padding: '0.5rem 0'
-                                    }}>
+                                    <div style={{ marginBottom: '1rem', padding: '0.5rem 0' }}>
                                         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                            All-Time Statistics
-                                        </span>
-                                        <span style={{
-                                            color: 'var(--text-muted)',
-                                            fontSize: '0.75rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem'
-                                        }}>
-                                            <span style={{
-                                                width: '8px',
-                                                height: '8px',
-                                                borderRadius: '50%',
-                                                background: '#22c55e',
-                                                animation: 'pulse 2s infinite'
-                                            }}></span>
-                                            Auto-refresh (10s)
-                                            {lastRefresh && (
-                                                <span style={{ marginLeft: '0.5rem' }}>
-                                                    Last: {lastRefresh.toLocaleTimeString()}
-                                                </span>
-                                            )}
+                                            Statistics (Since Jan 1, 2026)
                                         </span>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
@@ -2138,7 +2092,7 @@
             const [showNoPlayersWarning, setShowNoPlayersWarning] = useState(false);
             const [showEndOverlay, setShowEndOverlay] = useState(true);
             const [selectedMove, setSelectedMove] = useState(null);
-            const [prevGameStatus, setPrevGameStatus] = useState(null); // Track previous status to detect changes
+            const prevGameStatusRef = useRef(null); // Use ref to track previous status (avoids stale closure)
 
             // Track search duration and show warning if no players found after 10 seconds
             useEffect(() => {
@@ -2297,10 +2251,10 @@
                                                 });
                                             }
                                             // Only show end overlay when status CHANGES to finished (not every update)
-                                            if (newGameState.status === 'finished' && prevGameStatus !== 'finished') {
+                                            if (newGameState.status === 'finished' && prevGameStatusRef.current !== 'finished') {
                                                 setShowEndOverlay(true);
                                             }
-                                            setPrevGameStatus(newGameState.status);
+                                            prevGameStatusRef.current = newGameState.status;
                                         }
                                     },
                                     (error) => {
@@ -2350,7 +2304,7 @@
                     }
 
                     // Only show end overlay when status CHANGES to finished
-                    if (data.status === 'finished' && prevGameStatus !== 'finished') {
+                    if (data.status === 'finished' && prevGameStatusRef.current !== 'finished') {
                         if (typeof pollInterval === 'function') {
                             pollInterval();
                         } else {
@@ -2358,7 +2312,7 @@
                         }
                         setShowEndOverlay(true);
                     }
-                    setPrevGameStatus(data.status);
+                    prevGameStatusRef.current = data.status;
                 } catch (e) {
                     console.error('Fetch state error:', e);
                 }
@@ -2414,7 +2368,7 @@
                 setSearchStartTime(null);
                 setShowNoPlayersWarning(false);
                 setShowEndOverlay(true);
-                setPrevGameStatus(null);
+                prevGameStatusRef.current = null;
             };
 
             useEffect(() => {
@@ -2605,7 +2559,7 @@
                                     >✕</button>
                                     <div className="end-game-content">
                                         <div className={`end-icon ${gameState.didIWin ? 'win' : 'lose'}`}>
-                                            {gameState.didIWin ? '🔥' : '💧'}
+                                            {gameState.didIWin ? '🔥' : '❄️'}
                                         </div>
                                         <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
                                             {gameState.didIWin ? 'Victory!' : 'Defeat'}

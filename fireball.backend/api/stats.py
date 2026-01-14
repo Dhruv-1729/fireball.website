@@ -148,6 +148,7 @@ class handler(BaseHTTPRequestHandler):
 
             # Get Online/1v1 Games with full details (from 2026 onwards)
             online_games = []
+            games_to_delete = []  # Track games with N/A moves to delete
             try:
                 # Get finished, terminated or disconnected matches from 2026 onwards
                 target_statuses = ["finished", "terminated", "disconnected"]
@@ -164,6 +165,17 @@ class handler(BaseHTTPRequestHandler):
 
                 for doc in results:
                     match = doc.to_dict()
+                    
+                    # Check if both players have empty/N/A moves
+                    p1_moves = match.get('player1_moves', [])
+                    p2_moves = match.get('player2_moves', [])
+                    
+                    # If both are empty/None/N/A, mark for deletion and skip
+                    if (not p1_moves or p1_moves == ['N/A'] or p1_moves == []) and \
+                       (not p2_moves or p2_moves == ['N/A'] or p2_moves == []):
+                        games_to_delete.append(doc.id)
+                        continue
+                    
                     timestamp = match.get('finished_at') or match.get('terminated_at') or match.get('created_at')
                     ts_str = ''
                     if timestamp:
@@ -189,14 +201,28 @@ class handler(BaseHTTPRequestHandler):
                         'winner': winner_name,
                         'turns': match.get('turn', 1),
                         'timestamp': ts_str,
-                        'player1Moves': match.get('player1_moves', []),
-                        'player2Moves': match.get('player2_moves', []),
+                        'player1Moves': p1_moves if p1_moves else ['N/A'],
+                        'player2Moves': p2_moves if p2_moves else ['N/A'],
                         'status': match.get('status', 'finished')
                     })
                 
-                print(f"Total online games fetched: {len(online_games)}")
+                # Delete games with N/A moves for both players
+                for game_id in games_to_delete:
+                    try:
+                        db.collection("matches").document(game_id).delete()
+                        print(f"Deleted invalid game: {game_id}")
+                    except Exception as del_err:
+                        print(f"Failed to delete game {game_id}: {del_err}")
+                
+                print(f"Total online games fetched: {len(online_games)}, deleted {len(games_to_delete)} invalid games")
             except Exception as e:
                 print(f"Online games retrieval error: {e}")
+
+            # Get total online games count (excluding deleted ones)
+            try:
+                total_online_count = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "==", "finished").count().get()[0][0].value
+            except:
+                total_online_count = len(online_games)
 
             stats = {
                 "uniqueVisitors": unique_visitor_count,
@@ -205,7 +231,7 @@ class handler(BaseHTTPRequestHandler):
                 "avgMatchLength": round(avg_length, 2),
                 "aiGamesList": ai_games,
                 "onlineGamesList": online_games,
-                "totalOnlineGames": len(online_games)
+                "totalOnlineGames": total_online_count
             }
 
             self.send_response(200)
