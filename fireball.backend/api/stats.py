@@ -87,16 +87,19 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            # Get Unique Visitors (efficiently)
+            # Cutoff date: January 1, 2026 00:00:00 UTC
+            cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            
+            # Get Unique Visitors (efficiently) - no date filter as we want total unique
             try:
                 unique_visitor_count = db.collection("unique_visitors").count().get()[0][0].value
             except:
                 unique_visitor_count = 0
 
-            # Get AI vs Human Games with full details (last 100 only)
+            # Get AI vs Human Games with full details (last 100 only, from 2026 onwards)
             ai_games = []
             try:
-                matches_ref = db.collection("ai_vs_human_matches").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
+                matches_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
                 
                 for doc in matches_ref:
                     match = doc.to_dict()
@@ -131,10 +134,10 @@ class handler(BaseHTTPRequestHandler):
             ai_wins = sum(1 for g in ai_games if g['winner'] == 'ai')
             total_turns = sum(g['turns'] for g in ai_games)
             
-            # Get TOTAL count and GLOBAL win rate (efficiently)
+            # Get TOTAL count and GLOBAL win rate (efficiently) - only from 2026 onwards
             try:
-                total_ai_games = db.collection("ai_vs_human_matches").count().get()[0][0].value
-                total_ai_wins = db.collection("ai_vs_human_matches").where("winner", "==", "ai").count().get()[0][0].value
+                total_ai_games = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).count().get()[0][0].value
+                total_ai_wins = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).where("winner", "==", "ai").count().get()[0][0].value
                 win_rate = (total_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
             except Exception as count_err:
                 print(f"Total count error: {count_err}")
@@ -143,20 +146,21 @@ class handler(BaseHTTPRequestHandler):
             
             avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
-            # Get Online/1v1 Games with full details
+            # Get Online/1v1 Games with full details (from 2026 onwards)
             online_games = []
             try:
-                # Get finished, terminated or disconnected matches
+                # Get finished, terminated or disconnected matches from 2026 onwards
                 target_statuses = ["finished", "terminated", "disconnected"]
-                matches_ref = db.collection("matches").where("status", "in", target_statuses).order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+                matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "in", target_statuses).order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
                 
-                # Check if it works (Firestore might complain about composite index for status + created_at)
+                # Check if it works (Firestore might complain about composite index for created_at + status)
                 try:
                     results = list(matches_ref)
                 except Exception as e:
-                    print(f"Ordered query failed, falling back to unordered: {e}")
-                    matches_ref = db.collection("matches").where("status", "in", target_statuses).limit(100).stream()
-                    results = list(matches_ref)
+                    print(f"Ordered query failed, falling back to simpler query: {e}")
+                    # Fallback: get all from 2026 and filter by status in Python
+                    matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).order_by("created_at", direction=firestore.Query.DESCENDING).limit(200).stream()
+                    results = [doc for doc in matches_ref if doc.to_dict().get('status') in target_statuses][:100]
 
                 for doc in results:
                     match = doc.to_dict()

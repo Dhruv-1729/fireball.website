@@ -18,6 +18,39 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Firebase SDK (v9 modular) -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+
+        // Firebase config - this must match your Firebase project
+        // We'll fetch this from the backend to keep credentials secure
+        window.initFirebase = async function () {
+            try {
+                const res = await fetch('/api/auth?action=firebase_config');
+                const config = await res.json();
+
+                if (config.error) {
+                    console.warn('Firebase client config not available, falling back to polling');
+                    window.firebaseApp = null;
+                    window.firestoreDb = null;
+                    return;
+                }
+
+                window.firebaseApp = initializeApp(config);
+                window.firestoreDb = getFirestore(window.firebaseApp);
+                console.log('Firebase initialized for real-time listeners');
+            } catch (e) {
+                console.warn('Failed to initialize Firebase client:', e);
+                window.firebaseApp = null;
+                window.firestoreDb = null;
+            }
+        };
+
+        // Initialize on load
+        window.initFirebase();
+    </script>
+
     <style>
         :root {
             --fire-red: #dc2626;
@@ -124,9 +157,6 @@
             font-size: 0.9375rem;
         }
 
-        /* Removed permanent primary styling - all cards look the same now */
-
-        /* Admin button */
         .admin-trigger {
             position: fixed;
             bottom: 1rem;
@@ -326,55 +356,156 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(10, 10, 15, 0.85);
+            background: linear-gradient(135deg, rgba(15, 15, 20, 0.95), rgba(10, 10, 15, 0.95));
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 3px solid;
-            border-radius: 20px;
-            padding: 3rem;
+            border: 2px solid;
+            border-radius: 24px;
+            padding: 0;
             text-align: center;
-            z-index: 1000;
+            z-index: 10000;
             box-shadow:
-                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 25px 70px rgba(0, 0, 0, 0.6),
                 inset 0 1px 1px rgba(255, 255, 255, 0.1);
-            animation: slideDown 0.4s ease;
-            max-width: 400px;
-            position: relative;
+            animation: slideDownBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            min-width: 380px;
+            max-width: 420px;
+        }
+
+        @keyframes slideDownBounce {
+            0% {
+                transform: translate(-50%, -60%);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(-50%, -50%);
+                opacity: 1;
+            }
         }
 
         .end-game-overlay.win {
             border-color: var(--fire-orange);
             box-shadow:
-                0 20px 60px rgba(0, 0, 0, 0.5),
-                0 0 40px rgba(234, 88, 12, 0.3),
+                0 25px 70px rgba(0, 0, 0, 0.6),
+                0 0 50px rgba(234, 88, 12, 0.25),
                 inset 0 1px 1px rgba(255, 255, 255, 0.1);
         }
 
         .end-game-overlay.lose {
-            border-color: var(--text-muted);
+            border-color: rgba(150, 150, 170, 0.4);
+        }
+
+        .end-game-content {
+            padding: 2.5rem 2rem 2rem;
+        }
+
+        .end-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            animation: iconPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+            line-height: 1;
+        }
+
+        @keyframes iconPop {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .end-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin: 0 0 0.5rem 0;
+            letter-spacing: -0.02em;
+        }
+
+        .end-title.win {
+            color: var(--fire-orange);
+            text-shadow: 0 0 30px rgba(234, 88, 12, 0.4);
+        }
+
+        .end-title.lose {
+            color: var(--text-muted);
+        }
+
+        .end-subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin: 0 0 2rem 0;
+        }
+
+        .end-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .end-actions .btn {
+            flex: 1;
+            max-width: 160px;
+            padding: 0.875rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .play-again-btn {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .play-again-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .play-again-btn:hover::before {
+            width: 300px;
+            height: 300px;
         }
 
         .close-overlay-btn {
             position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: transparent;
-            border: none;
+            top: 1.25rem;
+            right: 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: var(--text-muted);
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             cursor: pointer;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
+            border-radius: 8px;
             transition: all 0.2s ease;
+            z-index: 10;
         }
 
         .close-overlay-btn:hover {
             background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
             color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .close-overlay-btn:active {
+            transform: scale(0.95);
         }
 
         .play-again-header {
@@ -390,6 +521,18 @@
             to {
                 transform: translate(-50%, -50%);
                 opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
             }
         }
 
@@ -888,6 +1031,7 @@
         }
 
         function WinRateChart({ mlStatus, chartTimeframe, setChartTimeframe }) {
+            const [hoveredPoint, setHoveredPoint] = useState(null);
             const now = new Date();
             const daysMap = { '1d': 1, '7d': 7, '30d': 30, '90d': 90, '6mo': 180 };
             const days = daysMap[chartTimeframe] || 30;
@@ -895,14 +1039,18 @@
             const cutoffStr = cutoffDate.toISOString().slice(0, 10);
             const filteredData = mlStatus.historical_win_rates.filter(d => d.date >= cutoffStr);
 
+            // Get all-time stats from training_data
+            const allTimeWinRate = mlStatus.training_data?.ai_win_rate || 0;
+            const allTimeGames = mlStatus.training_data?.ai_vs_human_games || 0;
+
             if (filteredData.length === 0) {
                 return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No data for this timeframe</p>;
             }
 
-            // Calculate overall stats from the filtered data
-            const totalGames = filteredData.reduce((sum, d) => sum + d.total, 0);
-            const totalWins = filteredData.reduce((sum, d) => sum + d.wins, 0);
-            const overallWinRate = totalGames > 0 ? (totalWins / totalGames * 100) : 0;
+            // Calculate stats from the filtered data (for selected period)
+            const periodGames = filteredData.reduce((sum, d) => sum + d.total, 0);
+            const periodWins = filteredData.reduce((sum, d) => sum + d.wins, 0);
+            const periodWinRate = periodGames > 0 ? (periodWins / periodGames * 100) : 0;
 
             // For trend calculation: compare first half vs second half of period
             const midpoint = Math.floor(filteredData.length / 2);
@@ -948,10 +1096,11 @@
 
             const lineColor = '#00C805';
             const gradientId = `winRateGradient_${chartTimeframe}`;
+            const periodLabel = chartTimeframe === '6mo' ? 'Last 6 Months' : `Last ${chartTimeframe.toUpperCase()}`;
 
             return (
                 <div style={{ marginTop: '2rem' }}>
-                    {/* Header Stats */}
+                    {/* Header Stats - Now clearly labeled as period stats */}
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(4, 1fr)',
@@ -963,26 +1112,26 @@
                     }}>
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
-                                {overallWinRate.toFixed(1)}%
+                                {periodWinRate.toFixed(1)}%
                             </div>
                             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                                Overall Win Rate
+                                Win Rate ({periodLabel})
                             </div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
-                                {totalGames}
+                                {periodGames}
                             </div>
                             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                                Games Played
+                                Games ({periodLabel})
                             </div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
                             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'white' }}>
-                                {totalWins}
+                                {periodWins}
                             </div>
                             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                                AI Wins
+                                AI Wins ({periodLabel})
                             </div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
@@ -1004,6 +1153,33 @@
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
                             Daily Win Rate
                         </div>
+
+                        {/* Hover Tooltip */}
+                        {hoveredPoint && (
+                            <div style={{
+                                position: 'absolute',
+                                left: hoveredPoint.x + 10,
+                                top: hoveredPoint.y - 60,
+                                background: 'rgba(0,0,0,0.9)',
+                                border: '1px solid var(--fire-orange)',
+                                borderRadius: '8px',
+                                padding: '0.75rem 1rem',
+                                zIndex: 100,
+                                pointerEvents: 'none',
+                                minWidth: '150px'
+                            }}>
+                                <div style={{ fontWeight: 600, color: 'white', marginBottom: '0.25rem' }}>
+                                    {new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </div>
+                                <div style={{ color: lineColor, fontSize: '1.25rem', fontWeight: 700 }}>
+                                    {hoveredPoint.winRate}%
+                                </div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                    {hoveredPoint.wins} wins / {hoveredPoint.total} games
+                                </div>
+                            </div>
+                        )}
+
                         <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
                             <defs>
                                 <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -1024,7 +1200,7 @@
 
                             {/* Average line */}
                             {(() => {
-                                const avgY = padding.top + innerHeight - ((overallWinRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
+                                const avgY = padding.top + innerHeight - ((periodWinRate - minRate) / (maxRate - minRate || 1)) * innerHeight;
                                 return (
                                     <g>
                                         <line x1={padding.left} y1={avgY} x2={chartWidth - padding.right} y2={avgY} stroke="var(--fire-orange)" strokeDasharray="6,4" strokeOpacity="0.6" />
@@ -1037,9 +1213,21 @@
                             <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinecap="round" />
 
                             {points.map((p, i) => (
-                                <g key={i} style={{ cursor: 'pointer' }}>
-                                    <circle cx={p.x} cy={p.y} r="5" fill={lineColor} stroke="var(--bg-secondary)" strokeWidth="2" />
-                                    <title>{p.date}: {p.winRate}% win rate ({p.wins} wins / {p.total} games)</title>
+                                <g
+                                    key={i}
+                                    style={{ cursor: 'pointer' }}
+                                    onMouseEnter={() => setHoveredPoint(p)}
+                                    onMouseLeave={() => setHoveredPoint(null)}
+                                >
+                                    <circle
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={hoveredPoint?.date === p.date ? 8 : 5}
+                                        fill={lineColor}
+                                        stroke="var(--bg-secondary)"
+                                        strokeWidth="2"
+                                        style={{ transition: 'r 0.15s ease' }}
+                                    />
                                 </g>
                             ))}
 
@@ -1096,6 +1284,7 @@
             const [chartTimeframe, setChartTimeframe] = useState('30d');
             const [maintenanceMode, setMaintenanceMode] = useState(false);
             const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+            const [lastRefresh, setLastRefresh] = useState(null);
 
             // Check if we have a valid token on mount
             useEffect(() => {
@@ -1132,6 +1321,24 @@
 
                 checkAuth();
             }, []);
+
+            // Auto-refresh stats every 10 seconds when authenticated and on overview tab
+            useEffect(() => {
+                if (!isAuthenticated) return;
+
+                // Initial fetch if not already loaded
+                if (!stats) {
+                    fetchStats();
+                }
+
+                const refreshInterval = setInterval(() => {
+                    if (activeTab === 'overview') {
+                        fetchStats();
+                    }
+                }, 10000);
+
+                return () => clearInterval(refreshInterval);
+            }, [isAuthenticated, activeTab]);
 
             const handleLogin = async () => {
                 setLoginError('');
@@ -1193,6 +1400,7 @@
 
                     const data = await res.json();
                     setStats(data);
+                    setLastRefresh(new Date());
                 } catch (e) {
                     setStats({ error: 'Failed to load stats' });
                 }
@@ -1508,28 +1716,62 @@
                             )}
 
                             {activeTab === 'overview' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                                    <div className="home-card" style={{ cursor: 'default' }}>
-                                        <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
-                                        <p className="home-card-desc">Unique Visitors</p>
+                                <>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: '1rem',
+                                        padding: '0.5rem 0'
+                                    }}>
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                            All-Time Statistics
+                                        </span>
+                                        <span style={{
+                                            color: 'var(--text-muted)',
+                                            fontSize: '0.75rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem'
+                                        }}>
+                                            <span style={{
+                                                width: '8px',
+                                                height: '8px',
+                                                borderRadius: '50%',
+                                                background: '#22c55e',
+                                                animation: 'pulse 2s infinite'
+                                            }}></span>
+                                            Auto-refresh (10s)
+                                            {lastRefresh && (
+                                                <span style={{ marginLeft: '0.5rem' }}>
+                                                    Last: {lastRefresh.toLocaleTimeString()}
+                                                </span>
+                                            )}
+                                        </span>
                                     </div>
-                                    <div className="home-card" style={{ cursor: 'default' }}>
-                                        <h2 className="home-card-title">{stats.aiWinRate || 0}%</h2>
-                                        <p className="home-card-desc">AI Win Rate</p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
+                                            <p className="home-card-desc">Unique Visitors</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.aiWinRate || 0}%</h2>
+                                            <p className="home-card-desc">AI Win Rate (All-Time)</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.aiGames || 0}</h2>
+                                            <p className="home-card-desc">Total AI Games</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
+                                            <p className="home-card-desc">Avg Rounds/Game</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.totalOnlineGames || 0}</h2>
+                                            <p className="home-card-desc">Online Games</p>
+                                        </div>
                                     </div>
-                                    <div className="home-card" style={{ cursor: 'default' }}>
-                                        <h2 className="home-card-title">{stats.aiGames || 0}</h2>
-                                        <p className="home-card-desc">Total AI Games</p>
-                                    </div>
-                                    <div className="home-card" style={{ cursor: 'default' }}>
-                                        <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
-                                        <p className="home-card-desc">Avg Rounds/Game</p>
-                                    </div>
-                                    <div className="home-card" style={{ cursor: 'default' }}>
-                                        <h2 className="home-card-title">{stats.totalOnlineGames || 0}</h2>
-                                        <p className="home-card-desc">Online Games</p>
-                                    </div>
-                                </div>
+                                </>
                             )}
 
                             {activeTab === 'ai-games' && (
@@ -1896,6 +2138,7 @@
             const [showNoPlayersWarning, setShowNoPlayersWarning] = useState(false);
             const [showEndOverlay, setShowEndOverlay] = useState(true);
             const [selectedMove, setSelectedMove] = useState(null);
+            const [prevGameStatus, setPrevGameStatus] = useState(null); // Track previous status to detect changes
 
             // Track search duration and show warning if no players found after 10 seconds
             useEffect(() => {
@@ -2014,6 +2257,75 @@
             };
 
             const startPolling = (mId) => {
+                if (window.firestoreDb) {
+                    try {
+                        import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js')
+                            .then(({ doc, onSnapshot }) => {
+                                console.log('Real-time listener enabled for match:', mId);
+                                const matchRef = doc(window.firestoreDb, 'matches', mId);
+                                const unsubscribe = onSnapshot(matchRef,
+                                    (docSnapshot) => {
+                                        if (docSnapshot.exists()) {
+                                            const match = docSnapshot.data();
+                                            const isPlayer1 = match.player1 === playerId;
+                                            const opponentSubmitted = (match.player2_move !== null) ? isPlayer1 : (match.player1_move !== null);
+                                            const winner = match.winner;
+                                            let didIWin = null;
+                                            if (winner) {
+                                                didIWin = (isPlayer1 && winner === 'player1') || (!isPlayer1 && winner === 'player2');
+                                            }
+                                            const newGameState = {
+                                                myCharges: isPlayer1 ? match.player1_charges : match.player2_charges,
+                                                opponentCharges: isPlayer1 ? match.player2_charges : match.player1_charges,
+                                                turn: match.turn,
+                                                status: match.status,
+                                                winner: match.winner,
+                                                didIWin: didIWin,
+                                                lastResult: match.last_result,
+                                                lastMyMove: isPlayer1 ? match.last_p1_move : match.last_p2_move,
+                                                lastOpponentMove: isPlayer1 ? match.last_p2_move : match.last_p1_move,
+                                                opponentSubmitted: opponentSubmitted,
+                                                opponent: isPlayer1 ? match.player2_username : match.player1_username
+                                            };
+                                            setGameState(newGameState);
+                                            if (newGameState.lastResult && newGameState.lastMyMove) {
+                                                setHistory(prev => {
+                                                    if (prev.length === 0 || prev[0].you !== newGameState.lastMyMove || prev[0].opp !== newGameState.lastOpponentMove) {
+                                                        return [{ you: newGameState.lastMyMove, opp: newGameState.lastOpponentMove }, ...prev.slice(0, 9)];
+                                                    }
+                                                    return prev;
+                                                });
+                                            }
+                                            // Only show end overlay when status CHANGES to finished (not every update)
+                                            if (newGameState.status === 'finished' && prevGameStatus !== 'finished') {
+                                                setShowEndOverlay(true);
+                                            }
+                                            setPrevGameStatus(newGameState.status);
+                                        }
+                                    },
+                                    (error) => {
+                                        console.error('Firebase listener error:', error);
+                                        startPollingFallback(mId);
+                                    }
+                                );
+                                setPollInterval(unsubscribe);
+                                fetchGameState(mId);
+                            })
+                            .catch(err => {
+                                console.warn('Failed to set up Firebase listener:', err);
+                                startPollingFallback(mId);
+                            });
+                    } catch (e) {
+                        console.warn('Firebase listener setup failed:', e);
+                        startPollingFallback(mId);
+                    }
+                } else {
+                    console.log('Firebase not available, using polling');
+                    startPollingFallback(mId);
+                }
+            };
+
+            const startPollingFallback = (mId) => {
                 const interval = setInterval(() => fetchGameState(mId), 1500);
                 setPollInterval(interval);
                 fetchGameState(mId);
@@ -2026,10 +2338,8 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'get_game_state', matchId: mId, playerId })
                     });
-
                     const data = await res.json();
                     setGameState(data);
-
                     if (data.lastResult && data.lastMyMove) {
                         setHistory(prev => {
                             if (prev.length === 0 || prev[0].you !== data.lastMyMove || prev[0].opp !== data.lastOpponentMove) {
@@ -2039,10 +2349,16 @@
                         });
                     }
 
-                    if (data.status === 'finished') {
-                        clearInterval(pollInterval);
+                    // Only show end overlay when status CHANGES to finished
+                    if (data.status === 'finished' && prevGameStatus !== 'finished') {
+                        if (typeof pollInterval === 'function') {
+                            pollInterval();
+                        } else {
+                            clearInterval(pollInterval);
+                        }
                         setShowEndOverlay(true);
                     }
+                    setPrevGameStatus(data.status);
                 } catch (e) {
                     console.error('Fetch state error:', e);
                 }
@@ -2080,7 +2396,13 @@
             };
 
             const resetMatch = () => {
-                if (pollInterval) clearInterval(pollInterval);
+                if (pollInterval) {
+                    if (typeof pollInterval === 'function') {
+                        pollInterval();
+                    } else {
+                        clearInterval(pollInterval);
+                    }
+                }
                 setStatus('idle');
                 setMatchId(null);
                 setOpponent('');
@@ -2092,13 +2414,54 @@
                 setSearchStartTime(null);
                 setShowNoPlayersWarning(false);
                 setShowEndOverlay(true);
+                setPrevGameStatus(null);
             };
 
             useEffect(() => {
                 return () => {
-                    if (pollInterval) clearInterval(pollInterval);
+                    if (pollInterval) {
+                        if (typeof pollInterval === 'function') {
+                            pollInterval();
+                        } else {
+                            clearInterval(pollInterval);
+                        }
+                    }
                 };
             }, [pollInterval]);
+
+            // Clean up matchmaking queue on tab close
+            useEffect(() => {
+                const handleBeforeUnload = () => {
+                    // If player is searching or in a match, clean up
+                    if (status === 'searching' || status === 'playing') {
+                        // Use sendBeacon for reliable cleanup on page unload
+                        const payload = JSON.stringify({
+                            action: 'leave_queue',
+                            playerId
+                        });
+
+                        // Try sendBeacon first (most reliable for unload)
+                        const blob = new Blob([payload], { type: 'application/json' });
+                        navigator.sendBeacon('/api/matchmaking', blob);
+                    }
+                };
+
+                window.addEventListener('beforeunload', handleBeforeUnload);
+
+                return () => {
+                    window.removeEventListener('beforeunload', handleBeforeUnload);
+                    // Also clean up when component unmounts
+                    if (status === 'searching' || status === 'playing') {
+                        fetch('/api/matchmaking', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'leave_queue', playerId }),
+                            keepalive: true
+                        }).catch(() => { });
+                    }
+                };
+            }, [status, playerId]);
+
 
             const myCharges = gameState?.myCharges || 0;
             const legalMoves = getLegalMoves(myCharges);
@@ -2232,10 +2595,48 @@
 
                             {gameState.status === 'finished' && showEndOverlay && (
                                 <div className={`end-game-overlay ${gameState.didIWin ? 'win' : 'lose'}`}>
-                                    <button className="close-overlay-btn" onClick={() => setShowEndOverlay(false)}>✕</button>
-                                    <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
-                                        {gameState.didIWin ? 'You Win!' : 'You Lose'}
-                                    </h2>
+                                    <button
+                                        className="close-overlay-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowEndOverlay(false);
+                                        }}
+                                        aria-label="Close"
+                                    >✕</button>
+                                    <div className="end-game-content">
+                                        <div className={`end-icon ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                            {gameState.didIWin ? '🔥' : '💧'}
+                                        </div>
+                                        <h2 className={`end-title ${gameState.didIWin ? 'win' : 'lose'}`}>
+                                            {gameState.didIWin ? 'Victory!' : 'Defeat'}
+                                        </h2>
+                                        <p className="end-subtitle">
+                                            {gameState.didIWin
+                                                ? `You defeated ${opponent}!`
+                                                : `${opponent} won this round`
+                                            }
+                                        </p>
+                                        <div className="end-actions">
+                                            <button
+                                                className="btn btn-primary play-again-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    resetMatch();
+                                                }}
+                                            >
+                                                Play Again
+                                            </button>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowEndOverlay(false);
+                                                }}
+                                            >
+                                                View Game
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </>

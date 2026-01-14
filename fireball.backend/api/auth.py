@@ -215,6 +215,16 @@ class handler(BaseHTTPRequestHandler):
             if action == 'config':
                 # Public endpoint - get site config including maintenance mode
                 response = get_site_config()
+            elif action == 'firebase_config':
+                # Public endpoint - get Firebase web config for client SDK
+                try:
+                    firebase_config = json.loads(os.environ.get('FIREBASE_WEB_CONFIG', '{}'))
+                    if firebase_config:
+                        response = firebase_config
+                    else:
+                        response = {'error': 'Firebase web config not available'}
+                except:
+                    response = {'error': 'Firebase web config not configured'}
             else:
                 response = {'error': 'Unknown action'}
             
