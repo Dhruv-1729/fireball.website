@@ -1548,11 +1548,11 @@
                                 <button
                                     className={`btn ${activeTab === 'ai-games' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('ai-games')}
-                                >Bot Games ({stats.aiGames || 0})</button>
+                                >Bot Games ({stats.aiGames === 'ERROR' ? '!' : (stats.aiGames || 0)})</button>
                                 <button
                                     className={`btn ${activeTab === 'online-games' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => setActiveTab('online-games')}
-                                >Online Games ({stats.totalOnlineGames || 0})</button>
+                                >Online Games ({stats.totalOnlineGames === 'ERROR' ? '!' : (stats.totalOnlineGames || 0)})</button>
                                 <button
                                     className={`btn ${activeTab === 'ml-status' ? 'btn-primary' : 'btn-secondary'}`}
                                     onClick={() => { setActiveTab('ml-status'); fetchMlStatus(); }}
@@ -1709,11 +1709,15 @@
                                             <p className="home-card-desc">Unique Visitors</p>
                                         </div>
                                         <div className="home-card" style={{ cursor: 'default' }}>
-                                            <h2 className="home-card-title">{stats.aiWinRate || 0}%</h2>
-                                            <p className="home-card-desc">AI Win Rate (All-Time)</p>
+                                            <h2 className="home-card-title" style={stats.aiWinRate === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.aiWinRate === 'ERROR' ? 'ERROR' : `${stats.aiWinRate || 0}%`}
+                                            </h2>
+                                            <p className="home-card-desc">AI Win Rate (Since 2026)</p>
                                         </div>
                                         <div className="home-card" style={{ cursor: 'default' }}>
-                                            <h2 className="home-card-title">{stats.aiGames || 0}</h2>
+                                            <h2 className="home-card-title" style={stats.aiGames === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.aiGames === 'ERROR' ? 'ERROR' : (stats.aiGames || 0)}
+                                            </h2>
                                             <p className="home-card-desc">Total AI Games</p>
                                         </div>
                                         <div className="home-card" style={{ cursor: 'default' }}>
@@ -1721,7 +1725,9 @@
                                             <p className="home-card-desc">Avg Rounds/Game</p>
                                         </div>
                                         <div className="home-card" style={{ cursor: 'default' }}>
-                                            <h2 className="home-card-title">{stats.totalOnlineGames || 0}</h2>
+                                            <h2 className="home-card-title" style={stats.totalOnlineGames === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.totalOnlineGames === 'ERROR' ? 'ERROR' : (stats.totalOnlineGames || 0)}
+                                            </h2>
                                             <p className="home-card-desc">Online Games</p>
                                         </div>
                                     </div>

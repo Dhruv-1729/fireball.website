@@ -119,20 +119,20 @@ def upload_local_model():
 def get_training_data_stats():
     """Get statistics about available training data."""
     if not db:
-        return {}
+        return {'error': 'Database not connected'}
     
     try:
         from datetime import datetime, timezone
         # Cutoff date: January 1, 2026 00:00:00 UTC
         cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         
-        # Count AI vs Human games from 2026 onwards
-        ai_games = list(db.collection('ai_vs_human_matches').where('timestamp', '>=', cutoff_date).limit(1000).stream())
+        # Count AI vs Human games from 2026 onwards (no limit for accurate count)
+        ai_games = list(db.collection('ai_vs_human_matches').where('timestamp', '>=', cutoff_date).stream())
         ai_game_count = len(ai_games)
         ai_wins = sum(1 for g in ai_games if g.to_dict().get('winner') == 'ai')
         
-        # Count online games from 2026 onwards
-        online_games = list(db.collection('matches').where('created_at', '>=', cutoff_date).where('status', '==', 'finished').limit(1000).stream())
+        # Count online games from 2026 onwards (no limit for accurate count)
+        online_games = list(db.collection('matches').where('created_at', '>=', cutoff_date).where('status', '==', 'finished').stream())
         online_game_count = len(online_games)
         
         return {
@@ -142,8 +142,14 @@ def get_training_data_stats():
             'total_games': ai_game_count + online_game_count
         }
     except Exception as e:
-        print(f"Error getting training stats: {e}")
-        return {}
+        print(f"CRITICAL: Error getting training stats: {e}")
+        return {
+            'ai_vs_human_games': 'ERROR',
+            'ai_win_rate': 'ERROR',
+            'online_games': 'ERROR',
+            'total_games': 'ERROR',
+            'error': str(e)
+        }
 
 
 def get_historical_win_rates(days=180):
@@ -198,8 +204,8 @@ def get_historical_win_rates(days=180):
         
         return result
     except Exception as e:
-        print(f"Error getting historical win rates: {e}")
-        return []
+        print(f"CRITICAL: Error getting historical win rates: {e}")
+        return [{'error': str(e)}]
 
 
 class handler(BaseHTTPRequestHandler):

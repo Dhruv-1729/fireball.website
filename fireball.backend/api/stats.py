@@ -135,14 +135,27 @@ class handler(BaseHTTPRequestHandler):
             total_turns = sum(g['turns'] for g in ai_games)
             
             # Get TOTAL count and GLOBAL win rate (efficiently) - only from 2026 onwards
+            total_ai_games = "ERROR"
+            win_rate = "ERROR"
             try:
+                # Try using count() aggregation first (requires index)
                 total_ai_games = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).count().get()[0][0].value
                 total_ai_wins = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).where("winner", "==", "ai").count().get()[0][0].value
                 win_rate = (total_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
+                print(f"Count query success: {total_ai_games} games, {total_ai_wins} wins")
             except Exception as count_err:
-                print(f"Total count error: {count_err}")
-                total_ai_games = display_ai_games
-                win_rate = (ai_wins / display_ai_games) * 100 if display_ai_games > 0 else 0
+                print(f"Count query failed (likely missing index): {count_err}")
+                # Fallback: fetch all documents and count in Python (more expensive but works)
+                try:
+                    all_games_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).stream()
+                    all_games_list = list(all_games_ref)
+                    total_ai_games = len(all_games_list)
+                    total_ai_wins = sum(1 for doc in all_games_list if doc.to_dict().get('winner') == 'ai')
+                    win_rate = (total_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
+                    print(f"Fallback count success: {total_ai_games} games, {total_ai_wins} wins")
+                except Exception as fallback_err:
+                    print(f"CRITICAL: Both count methods failed: {fallback_err}")
+                    # Leave as "ERROR" - don't show misleading data
             
             avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
@@ -219,14 +232,22 @@ class handler(BaseHTTPRequestHandler):
                 print(f"Online games retrieval error: {e}")
 
             # Get total online games count (excluding deleted ones)
+            total_online_count = "ERROR"
             try:
                 total_online_count = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "==", "finished").count().get()[0][0].value
-            except:
-                total_online_count = len(online_games)
+            except Exception as online_count_err:
+                print(f"Online count query failed: {online_count_err}")
+                # Fallback: fetch and count in Python
+                try:
+                    online_ref = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "==", "finished").stream()
+                    total_online_count = sum(1 for _ in online_ref)
+                except Exception as online_fallback_err:
+                    print(f"CRITICAL: Online count fallback failed: {online_fallback_err}")
+                    # Leave as "ERROR"
 
             stats = {
                 "uniqueVisitors": unique_visitor_count,
-                "aiWinRate": round(win_rate, 2),
+                "aiWinRate": round(win_rate, 2) if isinstance(win_rate, (int, float)) else win_rate,
                 "aiGames": total_ai_games,
                 "avgMatchLength": round(avg_length, 2),
                 "aiGamesList": ai_games,
