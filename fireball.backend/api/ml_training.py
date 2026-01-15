@@ -204,7 +204,7 @@ def train_new_model(episodes=100000, self_play_ratio=0.4):
             if use_self_play:
                 frozen_opponent_ai.update_histories(p_move, action)
             
-            # Enhanced reward structure to encourage strategic play
+            # Enhanced reward structure to counter "charge-only when AI has 0 charges" exploit
             reward = 0
             if result == "player2":  # AI wins
                 reward = 20
@@ -214,22 +214,53 @@ def train_new_model(episodes=100000, self_play_ratio=0.4):
             elif result == "player1":  # AI loses
                 reward = -20
             else:
-                # Base reward: slight preference for gaining charge advantage
+                # === CRITICAL: Counter the "charge when opponent has 0" exploit ===
+                
+                # HEAVY penalty for being at 0 charges while opponent has charges
+                # This is the KEY fix - AI must never let itself get stuck at 0
+                if game.comp_charges == 0 and game.player_charges > 0:
+                    reward -= 2.5  # Significant penalty for vulnerable position
+                    if game.player_charges >= 2:
+                        reward -= 1.5  # Extra danger when opponent can iceball
+                    if game.player_charges >= 5:
+                        reward -= 3.0  # Critical danger - opponent has megaball
+                
+                # Bonus for having charges when opponent has 0 (good position)
+                if game.comp_charges > 0 and game.player_charges == 0:
+                    reward += 1.5
+                
+                # Base reward: charge advantage with increased weight
                 charge_diff = game.comp_charges - game.player_charges
-                reward = charge_diff * 0.15
+                reward += charge_diff * 0.25  # Increased from 0.15
+                
+                # === Encourage megaball strategy ===
+                # Progressive bonus for building towards 5 charges
+                if game.comp_charges >= 3:
+                    reward += 0.3  # Getting close to megaball
+                if game.comp_charges >= 4:
+                    reward += 0.4  # Almost there
+                if game.comp_charges >= 5:
+                    reward += 0.8  # Megaball ready - strong position
+                
+                # === Discourage overusing iceball at exactly 2 charges ===
+                if action == "iceball" and ai_chg == 2:
+                    # Small penalty for using iceball immediately at 2 charges
+                    # Unless opponent also has 2+ charges (defensive use is OK)
+                    if p_chg < 2:
+                        reward -= 0.4  # Don't waste charges when opponent can't threaten
                 
                 # Penalize shield overuse - shields don't advance the game
                 if action == "shield":
                     reward -= 0.3  # Small penalty for shielding
-                    # Extra penalty for shielding when opponent has no charges (useless shield)
+                    # Extra penalty for shielding when opponent has no charges (useless)
                     if game.player_charges == 0:
                         reward -= 0.5
                 
-                # Reward charging when it leads to more options
-                if action == "charge" and game.comp_charges >= 1:
-                    reward += 0.1
+                # Reward charging when in safe position (opponent has 0-1 charges)
+                if action == "charge" and game.player_charges <= 1:
+                    reward += 0.2  # Safe time to build charges
                 
-                # Small penalty for stalling (both shield or both charge repeatedly)
+                # Small penalty for stalling (repeated shields)
                 if len(ai.move_history) >= 2 and ai.move_history[-1] == ai.move_history[-2] == "shield":
                     reward -= 0.4  # Penalize repeated shields
                 

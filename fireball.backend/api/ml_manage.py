@@ -373,18 +373,71 @@ class handler(BaseHTTPRequestHandler):
                 models = []
                 docs = db.collection('ml_models').stream()
                 for doc in docs:
-                    data = doc.to_dict()
+                    model_data = doc.to_dict()
                     models.append({
                         'version': doc.id,
-                        'created_at': str(data.get('created_at', '')),
-                        'q_table_size': data.get('q_table_size', 'unknown')
+                        'created_at': str(model_data.get('created_at', '')),
+                        'q_table_size': model_data.get('q_table_size', 'unknown')
                     })
                 response = {'success': True, 'models': models}
+            
+            elif action == 'upload_model':
+                # Upload a new model from base64-encoded pickle data
+                model_b64 = data.get('model_data')
+                version_name = data.get('version_name')
+                
+                if not model_b64 or not version_name:
+                    response = {'success': False, 'error': 'model_data and version_name required'}
+                else:
+                    try:
+                        # Validate it's valid base64/pickle
+                        model_bytes = base64.b64decode(model_b64)
+                        pickle.loads(model_bytes)  # Validates pickle format
+                        
+                        # Save to Firebase
+                        db.collection('ml_models').document(version_name).set({
+                            'model_data': model_b64,
+                            'created_at': firestore.SERVER_TIMESTAMP,
+                            'version': version_name,
+                            'q_table_size': len(pickle.loads(model_bytes))
+                        })
+                        response = {'success': True, 'message': f'Model {version_name} uploaded successfully'}
+                    except Exception as e:
+                        response = {'success': False, 'error': f'Invalid model data: {str(e)}'}
+            
+            elif action == 'start_ab_test':
+                # Manually start A/B test with a specified challenger model
+                # This bypasses the 200 game requirement
+                challenger_version = data.get('challenger_version')
+                
+                if not challenger_version:
+                    response = {'success': False, 'error': 'challenger_version required'}
+                else:
+                    # Verify the model exists
+                    model_doc = db.collection('ml_models').document(challenger_version).get()
+                    if not model_doc.exists:
+                        response = {'success': False, 'error': f'Model {challenger_version} not found'}
+                    else:
+                        # Start A/B test
+                        update_ml_config({
+                            'challenger_model_version': challenger_version,
+                            'ab_test_active': True,
+                            'model_a_games': 0,
+                            'model_a_wins': 0,
+                            'model_b_games': 0,
+                            'model_b_wins': 0
+                        })
+                        response = {
+                            'success': True, 
+                            'message': f'A/B test started with challenger: {challenger_version}',
+                            'note': 'Bypassed 200 game requirement as requested'
+                        }
                 
             else:
                 response = {'error': f'Unknown action: {action}', 'available_actions': [
                     'upload_original', 'enable_training', 'disable_training',
-                    'reset_game_counter', 'cancel_ab_test', 'update_thresholds', 'get_models'
+                    'reset_game_counter', 'cancel_ab_test', 'update_thresholds', 
+                    'get_models', 'upload_model', 'start_ab_test'
                 ]}
             
             self.send_response(200)
