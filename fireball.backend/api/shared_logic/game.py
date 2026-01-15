@@ -39,7 +39,6 @@ class FireballQLearning:
 
     def load_model(self, filename="fireball_ai_model.pkl"):
         try:
-            # Vercel bundles files, so we can open it from the root
             with open(filename, 'rb') as f:
                 self.q_table = defaultdict(lambda: defaultdict(float), pickle.load(f))
             return True

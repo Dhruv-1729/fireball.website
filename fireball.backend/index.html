@@ -23,8 +23,6 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
         import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
 
-        // Firebase config - this must match your Firebase project
-        // We'll fetch this from the backend to keep credentials secure
         window.initFirebase = async function () {
             try {
                 const res = await fetch('/api/auth?action=firebase_config');
@@ -47,7 +45,6 @@
             }
         };
 
-        // Initialize on load
         window.initFirebase();
     </script>
 
@@ -87,7 +84,6 @@
             padding: 2rem;
         }
 
-        /* Homepage */
         .home-container {
             min-height: calc(100vh - 4rem);
             display: flex;
@@ -180,7 +176,6 @@
             opacity: 1;
         }
 
-        /* Game page */
         .game-container {
             max-width: 700px;
             margin: 0 auto;
@@ -350,7 +345,6 @@
             color: var(--accent-purple);
         }
 
-        /* End game */
         .end-game-overlay {
             position: fixed;
             top: 50%;
@@ -588,7 +582,6 @@
             color: var(--text-primary);
         }
 
-        /* Guide page */
         .guide-container {
             max-width: 700px;
             margin: 0 auto;
@@ -666,7 +659,6 @@
             border-color: var(--accent-purple);
         }
 
-        /* Stats modal */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -708,7 +700,6 @@
             font-weight: 700;
         }
 
-        /* Alert */
         .alert {
             padding: 1rem;
             background: rgba(220, 38, 38, 0.15);
@@ -717,7 +708,6 @@
             margin-bottom: 1.5rem;
         }
 
-        /* Loader */
         .loader {
             width: 32px;
             height: 32px;
@@ -734,7 +724,6 @@
             }
         }
 
-        /* Online players badge */
         .online-badge {
             display: inline-flex;
             align-items: center;
@@ -768,7 +757,6 @@
             }
         }
 
-        /* Waiting for opponent animation */
         .waiting-overlay {
             display: flex;
             flex-direction: column;
@@ -840,7 +828,6 @@
             }
         }
 
-        /* Warning box for no players online */
         .warning-box {
             padding: 1rem;
             background: rgba(220, 38, 38, 0.08);
@@ -865,7 +852,6 @@
             }
         }
 
-        /* Disconnected overlay */
         .disconnected-overlay {
             text-align: center;
             padding: 3rem;
@@ -883,7 +869,6 @@
             margin-bottom: 1.5rem;
         }
 
-        /* Mobile */
         @media (max-width: 768px) {
             .app {
                 padding: 1rem;
@@ -931,7 +916,6 @@
         const { useState, useEffect, useCallback, useRef } = React;
         const { createRoot } = ReactDOM;
 
-        // Admin token stored in sessionStorage (not exposed in JS variables)
         const getAdminToken = () => sessionStorage.getItem('fireball_admin_token');
         const setAdminToken = (token) => sessionStorage.setItem('fireball_admin_token', token);
         const clearAdminToken = () => sessionStorage.removeItem('fireball_admin_token');
@@ -958,7 +942,6 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // Generate or retrieve persistent user ID for tracking unique browsers
         function getOrCreateUserId() {
             let userId = localStorage.getItem('fireball_user_id');
             if (!userId) {
@@ -1039,7 +1022,6 @@
             const cutoffStr = cutoffDate.toISOString().slice(0, 10);
             const filteredData = mlStatus.historical_win_rates.filter(d => d.date >= cutoffStr);
 
-            // Get all-time stats from training_data
             const allTimeWinRate = mlStatus.training_data?.ai_win_rate || 0;
             const allTimeGames = mlStatus.training_data?.ai_vs_human_games || 0;
 
@@ -1047,12 +1029,10 @@
                 return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No data for this timeframe</p>;
             }
 
-            // Calculate stats from the filtered data (for selected period)
             const periodGames = filteredData.reduce((sum, d) => sum + d.total, 0);
             const periodWins = filteredData.reduce((sum, d) => sum + d.wins, 0);
             const periodWinRate = periodGames > 0 ? (periodWins / periodGames * 100) : 0;
 
-            // For trend calculation: compare first half vs second half of period
             const midpoint = Math.floor(filteredData.length / 2);
             const firstHalf = filteredData.slice(0, midpoint);
             const secondHalf = filteredData.slice(midpoint);
@@ -1286,7 +1266,6 @@
             const [maintenanceLoading, setMaintenanceLoading] = useState(false);
 
 
-            // Check if we have a valid token on mount
             useEffect(() => {
                 const checkAuth = async () => {
                     const token = getAdminToken();
@@ -1325,7 +1304,6 @@
             const handleLogin = async () => {
                 setLoginError('');
 
-                // Hash password client-side using SHA-256
                 const hash = await sha256(password);
 
                 try {
@@ -1457,7 +1435,6 @@
             };
 
             const uploadModelFile = async () => {
-                // Create file input first
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = '.pkl';
@@ -1466,12 +1443,10 @@
                     const file = e.target.files[0];
                     if (!file) return;
 
-                    // Ask for version name AFTER file is selected
                     const versionName = prompt('Enter version name for this model (e.g., v_improved_20260114):');
                     if (!versionName) return;
 
                     try {
-                        // Read file as base64
                         const reader = new FileReader();
                         reader.onload = async (event) => {
                             const arrayBuffer = event.target.result;
@@ -1482,7 +1457,6 @@
                             }
                             const modelB64 = btoa(binary);
 
-                            // Upload to server
                             const token = getAdminToken();
                             const res = await fetch('/api/ml_manage', {
                                 method: 'POST',
@@ -1499,7 +1473,6 @@
 
                             const data = await res.json();
                             if (data.success) {
-                                // Ask if they want to start A/B test now
                                 if (confirm(data.message + '\n\nStart A/B test with this model now?')) {
                                     startABTestWithModel(versionName);
                                 } else {
@@ -2070,7 +2043,6 @@
             const [initializing, setInitializing] = useState(true);
             const [error, setError] = useState(null);
 
-            // Start a new game session on mount
             useEffect(() => {
                 startNewSession();
             }, []);
@@ -2135,7 +2107,6 @@
                     const data = await res.json();
 
                     if (data.error) {
-                        // If session expired/not found, prompt to restart
                         if (data.error.includes('Session') || data.error.includes('expired')) {
                             setError('Session expired. Starting a new game...');
                             setTimeout(() => startNewSession(), 1500);
@@ -2278,7 +2249,6 @@
             const [selectedMove, setSelectedMove] = useState(null);
             const prevGameStatusRef = useRef(null); // Use ref to track previous status (avoids stale closure)
 
-            // Track search duration and show warning if no players found after 10 seconds
             useEffect(() => {
                 if (status !== 'searching') {
                     setShowNoPlayersWarning(false);
@@ -2310,7 +2280,6 @@
                         clearInterval(checkTimeout);
                         if (pollInterval) clearInterval(pollInterval);
                         setStatus('disconnected');
-                        // Notify backend that match is terminated
                         fetch('/api/matchmaking', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -2327,7 +2296,6 @@
                 return () => clearInterval(checkTimeout);
             }, [myMoveSubmitted, moveSubmitTime, pollInterval]);
 
-            // Reset move submission state when turn changes
             useEffect(() => {
                 if (gameState?.turn) {
                     setMyMoveSubmitted(false);
@@ -2434,7 +2402,6 @@
                                                     return prev;
                                                 });
                                             }
-                                            // Only show end overlay when status CHANGES to finished (not every update)
                                             if (newGameState.status === 'finished' && prevGameStatusRef.current !== 'finished') {
                                                 setShowEndOverlay(true);
                                             }
@@ -2487,7 +2454,6 @@
                         });
                     }
 
-                    // Only show end overlay when status CHANGES to finished
                     if (data.status === 'finished' && prevGameStatusRef.current !== 'finished') {
                         if (typeof pollInterval === 'function') {
                             pollInterval();
@@ -2567,18 +2533,14 @@
                 };
             }, [pollInterval]);
 
-            // Clean up matchmaking queue on tab close
             useEffect(() => {
                 const handleBeforeUnload = () => {
-                    // If player is searching or in a match, clean up
                     if (status === 'searching' || status === 'playing') {
-                        // Use sendBeacon for reliable cleanup on page unload
                         const payload = JSON.stringify({
                             action: 'leave_queue',
                             playerId
                         });
 
-                        // Try sendBeacon first (most reliable for unload)
                         const blob = new Blob([payload], { type: 'application/json' });
                         navigator.sendBeacon('/api/matchmaking', blob);
                     }
@@ -2588,7 +2550,6 @@
 
                 return () => {
                     window.removeEventListener('beforeunload', handleBeforeUnload);
-                    // Also clean up when component unmounts
                     if (status === 'searching' || status === 'playing') {
                         fetch('/api/matchmaking', {
                             method: 'POST',
@@ -2604,10 +2565,8 @@
             const myCharges = gameState?.myCharges || 0;
             const legalMoves = getLegalMoves(myCharges);
 
-            // Check if we're waiting for opponent (we submitted but they haven't)
             const waitingForOpponent = myMoveSubmitted && gameState && !gameState.opponentSubmitted && gameState.status !== 'finished';
 
-            // Online badge component
             const OnlineBadge = () => (
                 <div className="online-badge">
                     <span className="online-dot"></span>
@@ -2800,8 +2759,6 @@
             const [maintenanceMessage, setMaintenanceMessage] = useState('');
             const [checkingMaintenance, setCheckingMaintenance] = useState(true);
 
-            // Use sessionStorage for per-tab playerId (allows testing matchmaking in multiple tabs)
-            // Each tab gets a unique session ID for matchmaking purposes
             const [playerId] = useState(() => {
                 let id = sessionStorage.getItem('fireball_session_id');
                 if (!id) {
@@ -2811,10 +2768,8 @@
                 return id;
             });
 
-            // Persistent userId for tracking unique browsers (survives browser close)
             const [userId] = useState(() => getOrCreateUserId());
 
-            // Check maintenance mode on startup
             useEffect(() => {
                 const checkMaintenance = async () => {
                     try {
@@ -2823,7 +2778,6 @@
                         setIsMaintenanceMode(data.maintenance_mode || false);
                         setMaintenanceMessage(data.maintenance_message || 'Site undergoing temporary maintenance. Please check back later.');
                     } catch (e) {
-                        // If we can't reach the server, don't block users
                         console.log('Could not check maintenance status');
                     }
                     setCheckingMaintenance(false);
@@ -2832,7 +2786,6 @@
                 checkMaintenance();
             }, []);
 
-            // URL routing
             const navigate = (newPage) => {
                 const paths = {
                     'home': '/',
@@ -2845,7 +2798,6 @@
                 setPage(newPage);
             };
 
-            // Handle browser back/forward
             useEffect(() => {
                 const handlePopState = () => {
                     setPage(getPageFromUrl());
@@ -2854,7 +2806,6 @@
                 return () => window.removeEventListener('popstate', handlePopState);
             }, []);
 
-            // Heartbeat for online players tracking (on all pages except admin)
             useEffect(() => {
                 if (page === 'admin' || isMaintenanceMode) return;
 
@@ -2883,7 +2834,6 @@
                 return () => clearInterval(interval);
             }, [playerId, page, isMaintenanceMode]);
 
-            // Show loading while checking maintenance
             if (checkingMaintenance) {
                 return (
                     <div className="app" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -2892,7 +2842,6 @@
                 );
             }
 
-            // Check maintenance mode first (allow admin to still access dashboard)
             if (isMaintenanceMode && page !== 'admin') {
                 return <MaintenancePage message={maintenanceMessage} />;
             }
