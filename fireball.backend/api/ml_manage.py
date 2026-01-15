@@ -34,7 +34,7 @@ except:
 # ============ CONFIG CONSTANTS ============
 TRAINING_ENABLED = True  # Master switch
 GAMES_THRESHOLD_FOR_TRAINING = 200
-AB_TEST_GAMES_REQUIRED = 20
+AB_TEST_GAMES_REQUIRED = 25
 
 
 def get_ml_config():
@@ -357,6 +357,58 @@ class handler(BaseHTTPRequestHandler):
                     'model_b_wins': 0
                 })
                 response = {'success': True, 'message': 'A/B test cancelled'}
+            
+            elif action == 'manually_conclude_ab_test':
+                # Manually stop A/B test and choose winner
+                winner = data.get('winner')  # 'A' or 'B'
+                
+                if winner not in ['A', 'B']:
+                    response = {'success': False, 'error': 'Winner must be "A" or "B"'}
+                else:
+                    config = get_ml_config()
+                    if not config or not config.get('ab_test_active'):
+                        response = {'success': False, 'error': 'No active A/B test'}
+                    else:
+                        current_version = config.get('current_model_version')
+                        challenger_version = config.get('challenger_model_version')
+                        
+                        if winner == 'B':
+                            # Promote challenger
+                            if current_version and current_version != 'v1_original':
+                                db.collection('ml_models').document(current_version).delete()
+                            
+                            update_ml_config({
+                                'current_model_version': challenger_version,
+                                'challenger_model_version': None,
+                                'ab_test_active': False,
+                                'model_a_games': 0,
+                                'model_a_wins': 0,
+                                'model_b_games': 0,
+                                'model_b_wins': 0
+                            })
+                            response = {
+                                'success': True, 
+                                'message': f'Model B ({challenger_version}) promoted to current model',
+                                'winner': 'B'
+                            }
+                        else:  # winner == 'A'
+                            # Keep current, delete challenger
+                            if challenger_version:
+                                db.collection('ml_models').document(challenger_version).delete()
+                            
+                            update_ml_config({
+                                'challenger_model_version': None,
+                                'ab_test_active': False,
+                                'model_a_games': 0,
+                                'model_a_wins': 0,
+                                'model_b_games': 0,
+                                'model_b_wins': 0
+                            })
+                            response = {
+                                'success': True,
+                                'message': f'Model A ({current_version}) remains as current model',
+                                'winner': 'A'
+                            }
                 
             elif action == 'update_thresholds':
                 updates = {}
@@ -436,8 +488,8 @@ class handler(BaseHTTPRequestHandler):
             else:
                 response = {'error': f'Unknown action: {action}', 'available_actions': [
                     'upload_original', 'enable_training', 'disable_training',
-                    'reset_game_counter', 'cancel_ab_test', 'update_thresholds', 
-                    'get_models', 'upload_model', 'start_ab_test'
+                    'reset_game_counter', 'cancel_ab_test', 'manually_conclude_ab_test',
+                    'update_thresholds', 'get_models', 'upload_model', 'start_ab_test'
                 ]}
             
             self.send_response(200)
