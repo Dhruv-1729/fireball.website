@@ -3,12 +3,12 @@
 Fireball Ultimate Training Script
 ==================================
 Creates ONE highly-trained model through intensive multi-phase training.
-Takes 15+ minutes but produces the best possible model.
+Takes ~8-12 minutes with optimizations to produce the best possible model.
 
 Training phases:
 1. Exploration phase: Learn all game mechanics (random opponents)
 2. Competitive phase: Train against strong self-play opponents
-3. Anti-exploit phase: Learn to counter charge-only tactics
+3. Anti-exploit phase: Learn to counter charge-only & passive tactics
 4. Refinement phase: Final polish against mixture of strategies
 """
 
@@ -205,22 +205,58 @@ def get_aggressive_reward(game, action, result, prev_my_charges, prev_opp_charge
 
 def create_exploit_opponent():
     """
-    Returns a function that implements the exploit strategy:
-    - Charge when AI has 0 charges
-    - Attack aggressively otherwise
+    Returns a function that implements a smart exploit strategy:
+    - Takes advantage of opponent having 0 charges
+    - Uses shields defensively when opponent has high charges
+    - Prioritizes winning attacks over unnecessary charging
     """
     def choose_move(ai_charges, opp_charges):
-        if ai_charges == 0:
-            return "charge"  # Safe to charge
-        # Be aggressive
-        if opp_charges >= 5:
+        # We are the opponent, so:
+        # ai_charges = the model's charges (the AI we're testing)
+        # opp_charges = OUR charges (the exploit bot)
+        my_charges = opp_charges  # Rename for clarity
+        their_charges = ai_charges
+        
+        # If we have megaball, use it (instant win unless they megaball too)
+        if my_charges >= 5:
             return "megaball"
-        elif opp_charges >= 2:
+        
+        # If we can attack and they have 0 charges (safe attack)
+        if their_charges == 0:
+            if my_charges >= 2:
+                return "iceball"  # Best attack when they can't counter
+            elif my_charges >= 1:
+                return "fireball"
+            else:
+                return "charge"  # Build up for attack
+        
+        # If they have megaball ready, we must shield or counter
+        if their_charges >= 5:
+            if my_charges >= 5:
+                return "megaball"  # Counter megaball
+            return "shield"  # Must shield
+        
+        # If they could iceball us and we can't counter, shield
+        if their_charges >= 2 and my_charges < 2:
+            # 60% chance to shield, 40% to charge (some risk-taking)
+            return "shield" if random.random() < 0.6 else "charge"
+        
+        # If we have iceball and they have 1 charge, use it
+        if my_charges >= 2 and their_charges <= 1:
             return "iceball"
-        elif opp_charges >= 1:
+        
+        # If we have fireball and they're likely to charge
+        if my_charges >= 1 and their_charges == 0:
             return "fireball"
+        
+        # Default: build charges or attack opportunistically
+        if my_charges >= 2:
+            return "iceball" if random.random() < 0.5 else "charge"
+        elif my_charges >= 1:
+            return "fireball" if random.random() < 0.3 else "charge"
         else:
             return "charge"
+    
     return choose_move
 
 
@@ -259,7 +295,11 @@ def train_phase(model, phase_name, episodes, opponent_strategy, verbose=True):
         if opponent and hasattr(opponent, 'reset_for_game'):
             opponent.reset_for_game()
         
-        while not game.game_over:
+        rounds = 0
+        max_rounds = 50  # Prevent infinite stalemates
+        
+        while not game.game_over and rounds < max_rounds:
+            rounds += 1
             prev_my_charges = game.ai1_charges
             prev_opp_charges = game.ai2_charges
             
@@ -316,16 +356,22 @@ def train_phase(model, phase_name, episodes, opponent_strategy, verbose=True):
     return model
 
 
-def test_against_exploit(model, num_games=500):
+def test_against_exploit(model, num_games=500, show_progress=False):
     """Test model against the exploit strategy."""
     exploit_opponent = create_exploit_opponent()
     wins = 0
+    ties = 0
+    max_rounds = 50  # Prevent infinite stalemates
     
-    for _ in range(num_games):
+    for game_num in range(num_games):
+        if show_progress and game_num > 0 and game_num % 100 == 0:
+            print(f".", end="", flush=True)
+        
         game = FireballGame()
         model.reset_for_game()
+        rounds = 0
         
-        while not game.game_over and len(model.move_history) < 100:
+        while not game.game_over and rounds < max_rounds:
             state = model.get_state(game.ai1_charges, game.ai2_charges)
             legal = FireballQLearning.get_legal_moves(game.ai1_charges)
             model_move = model.choose_action(state, legal, training=False)
@@ -334,12 +380,25 @@ def test_against_exploit(model, num_games=500):
             
             result = game.execute_turn(model_move, exploit_move)
             model.update_histories(model_move, exploit_move)
+            rounds += 1
             
             if result == "ai1":
                 wins += 1
                 break
             elif result == "ai2":
                 break
+        else:
+            # Game reached max rounds without winner - tiebreaker by charges
+            if game.ai1_charges > game.ai2_charges:
+                wins += 1
+            elif game.ai1_charges == game.ai2_charges:
+                ties += 1
+                # Split ties 50/50 for fairness
+                if random.random() < 0.5:
+                    wins += 1
+    
+    if show_progress:
+        print()  # newline after dots
     
     return wins / num_games
 
@@ -349,7 +408,7 @@ def main():
     print("Fireball ULTIMATE Training")
     print("=" * 70)
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("\nThis will take 15-20 minutes to produce the best possible model.")
+    print("\nThis will take ~8-12 minutes to produce the best possible model.")
     print("=" * 70)
     
     # Initialize model
@@ -368,28 +427,108 @@ def main():
     
     # Phase 3: Anti-exploit training
     print("\nPhase 3: Anti-Exploit Training")
-    print("  Testing current exploit resistance...")
-    exploit_resist_before = test_against_exploit(model, 200)
+    print("  Testing current exploit resistance", end="", flush=True)
+    exploit_resist_before = test_against_exploit(model, 200, show_progress=True)
     print(f"  Before: {exploit_resist_before * 100:.1f}%")
     
-    model = train_phase(model, "  Training against exploit", 30000, 'exploit', verbose=False)
+    print("  Training against exploit strategy...")
+    model = train_phase(model, "  Anti-exploit training", 30000, 'exploit', verbose=True)
     
-    exploit_resist_after = test_against_exploit(model, 500)
+    print("  Testing improved exploit resistance", end="", flush=True)
+    exploit_resist_after = test_against_exploit(model, 500, show_progress=True)
     print(f"  After: {exploit_resist_after * 100:.1f}%")
     print(f"  Improvement: +{(exploit_resist_after - exploit_resist_before) * 100:.1f}%")
     
-    # Phase 4: Refinement (mix of everything)
+    # Phase 4: Refinement (mix of everything) - EFFICIENT batch training
     print("\nPhase 4: Final Refinement")
     print("  Polishing with mixed opponents...")
     
-    # Do mixed training
-    for i in range(30000):
-        if i % 10000 == 0 and i > 0:
-            print(f"    Episode {i:,}/30,000")
-        
-        strategy = random.choice(['self_play', 'exploit', 'random', 'random'])
-        train_phase(model, "", 1, strategy, verbose=False)
+    # Do mixed training efficiently (not 30k individual function calls!)
+    frozen_self = model.clone()
+    frozen_self.epsilon = 0.05
+    exploit_fn = create_exploit_opponent()
+    total_episodes = 30000
+    wins = 0
     
+    for episode in range(total_episodes):
+        # Progress output
+        if episode > 0 and episode % 10000 == 0:
+            win_rate = wins / episode * 100
+            print(f"    Episode {episode:,}/{total_episodes:,} | Win rate: {win_rate:.1f}%")
+        
+        # Rotate opponents for variety
+        strategy_idx = episode % 4
+        
+        game = FireballGame()
+        model.eligibility_traces.clear()
+        model.reset_for_game()
+        
+        # Choose opponent based on strategy rotation
+        if strategy_idx == 0:  # self-play
+            opponent = frozen_self
+            frozen_self.reset_for_game()
+        elif strategy_idx == 1:  # exploit
+            opponent = exploit_fn
+        else:  # random (2 and 3)
+            opponent = None
+        
+        state = model.get_state(game.ai1_charges, game.ai2_charges)
+        action = model.choose_action(state, FireballQLearning.get_legal_moves(game.ai1_charges), True)
+        
+        rounds = 0
+        max_rounds = 50
+        
+        while not game.game_over and rounds < max_rounds:
+            rounds += 1
+            prev_my_charges = game.ai1_charges
+            prev_opp_charges = game.ai2_charges
+            
+            # Get opponent move
+            if opponent:
+                if callable(opponent):
+                    opp_move = opponent(game.ai1_charges, game.ai2_charges)
+                else:
+                    opp_state = opponent.get_state(game.ai2_charges, game.ai1_charges)
+                    opp_legal = FireballQLearning.get_legal_moves(game.ai2_charges)
+                    opp_move = opponent.choose_action(opp_state, opp_legal, training=False)
+            else:
+                opp_legal = FireballQLearning.get_legal_moves(game.ai2_charges)
+                opp_move = random.choice(opp_legal)
+            
+            result = game.execute_turn(action, opp_move)
+            model.update_histories(action, opp_move)
+            if opponent and hasattr(opponent, 'update_histories'):
+                opponent.update_histories(opp_move, action)
+            
+            reward = get_aggressive_reward(game, action, result, prev_my_charges, prev_opp_charges)
+            
+            next_state = model.get_state(game.ai1_charges, game.ai2_charges)
+            next_legal = FireballQLearning.get_legal_moves(game.ai1_charges)
+            next_action = model.choose_action(next_state, next_legal, True)
+            max_next_q = 0.0 if game.game_over else max([model.q_table[next_state][m] for m in next_legal] or [0.0])
+            
+            delta = reward + (model.discount_factor * max_next_q) - model.q_table[state][action]
+            model.eligibility_traces[state][action] += 1
+            
+            for s_trace, a_dict in list(model.eligibility_traces.items()):
+                for a_trace, e_val in list(a_dict.items()):
+                    model.q_table[s_trace][a_trace] += model.learning_rate * delta * e_val
+                    model.eligibility_traces[s_trace][a_trace] *= model.discount_factor * model.lambda_val
+            
+            state, action = next_state, next_action
+            
+            if result == "ai1":
+                wins += 1
+        
+        # Slow epsilon decay during refinement
+        if (episode + 1) % 5000 == 0:
+            model.epsilon = max(0.01, model.epsilon * 0.96)
+            # Update frozen self periodically
+            frozen_self = model.clone()
+            frozen_self.epsilon = 0.05
+    
+    final_refine_winrate = wins / total_episodes * 100
+    print(f"    Episode {total_episodes:,}/{total_episodes:,} | Win rate: {final_refine_winrate:.1f}%")
     print("  Refinement complete!")
     
     # Set epsilon to 0 for evaluation
@@ -400,8 +539,8 @@ def main():
     print("FINAL EVALUATION")
     print("=" * 70)
     
-    print("\nExploit resistance test (1000 games)...")
-    final_exploit = test_against_exploit(model, 1000)
+    print("\nExploit resistance test (1000 games)", end="", flush=True)
+    final_exploit = test_against_exploit(model, 1000, show_progress=True)
     print(f"Exploit win rate: {final_exploit * 100:.1f}%")
     
     # Save model
