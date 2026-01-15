@@ -1436,6 +1436,7 @@
                 setMaintenanceLoading(false);
             };
 
+
             const uploadOriginalModel = async () => {
                 try {
                     const token = getAdminToken();
@@ -1452,6 +1453,98 @@
                     fetchMlStatus();
                 } catch (e) {
                     alert('Failed to upload model');
+                }
+            };
+
+            const uploadModelFile = async () => {
+                // Prompt for model name
+                const versionName = prompt('Enter version name for this model (e.g., v_improved_20260114):');
+                if (!versionName) return;
+
+                // Create file input
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.pkl';
+
+                input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    try {
+                        // Read file as base64
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                            const arrayBuffer = event.target.result;
+                            const bytes = new Uint8Array(arrayBuffer);
+                            let binary = '';
+                            for (let i = 0; i < bytes.byteLength; i++) {
+                                binary += String.fromCharCode(bytes[i]);
+                            }
+                            const modelB64 = btoa(binary);
+
+                            // Upload to server
+                            const token = getAdminToken();
+                            const res = await fetch('/api/ml_manage', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                    action: 'upload_model',
+                                    model_data: modelB64,
+                                    version_name: versionName
+                                })
+                            });
+
+                            const data = await res.json();
+                            if (data.success) {
+                                alert(data.message || 'Model uploaded successfully!');
+                                fetchMlStatus();
+                            } else {
+                                alert('Error: ' + (data.error || 'Upload failed'));
+                            }
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } catch (e) {
+                        alert('Failed to upload model: ' + e.message);
+                    }
+                };
+
+                input.click();
+            };
+
+            const startABTest = async () => {
+                const challenger = prompt('Enter the challenger model version name to test against current model:');
+                if (!challenger) return;
+
+                if (!confirm(`Start A/B test with "${challenger}" as Model B?\n\nThis will:\n- Bypass the 200 game requirement\n- Begin testing immediately\n- Reset any existing A/B test`)) {
+                    return;
+                }
+
+                try {
+                    const token = getAdminToken();
+                    const res = await fetch('/api/ml_manage', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            action: 'start_ab_test',
+                            challenger_version: challenger
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        alert(data.message + '\n\n' + (data.note || ''));
+                        fetchMlStatus();
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to start A/B test'));
+                    }
+                } catch (e) {
+                    alert('Failed to start A/B test: ' + e.message);
                 }
             };
 
@@ -1662,19 +1755,27 @@
                                                     }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                             <span style={{ color: 'var(--text-muted)' }}>AI vs Human Games</span>
-                                                            <span>{mlStatus.training_data?.ai_vs_human_games || 0}</span>
+                                                            <span style={mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.ai_vs_human_games || 0)}
+                                                            </span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                             <span style={{ color: 'var(--text-muted)' }}>AI Win Rate</span>
-                                                            <span>{mlStatus.training_data?.ai_win_rate || 0}%</span>
+                                                            <span style={mlStatus.training_data?.ai_win_rate === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.ai_win_rate === 'ERROR' ? 'ERROR' : `${mlStatus.training_data?.ai_win_rate || 0}%`}
+                                                            </span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                             <span style={{ color: 'var(--text-muted)' }}>Online Games</span>
-                                                            <span>{mlStatus.training_data?.online_games || 0}</span>
+                                                            <span style={mlStatus.training_data?.online_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.online_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.online_games || 0)}
+                                                            </span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                             <span style={{ color: 'var(--text-muted)' }}>Total</span>
-                                                            <span>{mlStatus.training_data?.total_games || 0}</span>
+                                                            <span style={mlStatus.training_data?.total_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.total_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.total_games || 0)}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1682,6 +1783,29 @@
                                                     <button className="btn btn-primary" onClick={uploadOriginalModel} style={{ marginTop: '1rem' }}>
                                                         Upload Original Model to Firebase
                                                     </button>
+                                                )}
+
+                                                {/* Model Management Actions */}
+                                                {mlStatus.config?.current_model && (
+                                                    <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)' }}>
+                                                        <h4 style={{ marginBottom: '0.75rem' }}>ML Model Management</h4>
+                                                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                                            <button className="btn btn-secondary" onClick={uploadModelFile} style={{ flex: '1 1 auto' }}>
+                                                                📁 Upload New Model
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-primary"
+                                                                onClick={startABTest}
+                                                                disabled={mlStatus.config?.ab_test_active}
+                                                                style={{ flex: '1 1 auto', opacity: mlStatus.config?.ab_test_active ? 0.5 : 1 }}
+                                                            >
+                                                                🧪 Start A/B Test
+                                                            </button>
+                                                        </div>
+                                                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                                                            Upload improved_model.pkl and start testing against the current model
+                                                        </p>
+                                                    </div>
                                                 )}
 
                                                 {/* ML Win Rate Chart */}
