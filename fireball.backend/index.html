@@ -1786,218 +1786,217 @@
                                                                     )}
                                                                 </div>
                                                             </div>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                onClick={concludeABTest}
+                                                                style={{ marginTop: '1rem', width: '100%', pointerEvents: 'auto' }}
+                                                            >
+                                                                ✓ Choose Winner & End Test
+                                                            </button>
                                                         </div>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            onClick={concludeABTest}
-                                                            style={{ marginTop: '1rem', width: '100%', pointerEvents: 'all' }}
-                                                        >
-                                                            ✓ Choose Winner & End Test
-                                                        </button>
+                                                    </>
+                                                )}
+                                                <div style={{ marginTop: '1.5rem' }}>
+                                                    <h4 style={{ marginBottom: '0.75rem' }}>Training Data Available</h4>
+                                                    <div style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(2, 1fr)',
+                                                        gap: '0.5rem',
+                                                        background: 'var(--bg-secondary)',
+                                                        padding: '1rem',
+                                                        borderRadius: '8px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>AI vs Human Games</span>
+                                                            <span style={mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.ai_vs_human_games || 0)}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>AI Win Rate</span>
+                                                            <span style={mlStatus.training_data?.ai_win_rate === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.ai_win_rate === 'ERROR' ? 'ERROR' : `${mlStatus.training_data?.ai_win_rate || 0}%`}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>Online Games</span>
+                                                            <span style={mlStatus.training_data?.online_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.online_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.online_games || 0)}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span style={{ color: 'var(--text-muted)' }}>Total</span>
+                                                            <span style={mlStatus.training_data?.total_games === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                                {mlStatus.training_data?.total_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.total_games || 0)}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                            </>
-                                        )}
-                                        <div style={{ marginTop: '1.5rem' }}>
-                                            <h4 style={{ marginBottom: '0.75rem' }}>Training Data Available</h4>
-                                            <div style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                                gap: '0.5rem',
-                                                background: 'var(--bg-secondary)',
-                                                padding: '1rem',
-                                                borderRadius: '8px'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--text-muted)' }}>AI vs Human Games</span>
-                                                    <span style={mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                                        {mlStatus.training_data?.ai_vs_human_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.ai_vs_human_games || 0)}
-                                                    </span>
                                                 </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--text-muted)' }}>AI Win Rate</span>
-                                                    <span style={mlStatus.training_data?.ai_win_rate === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                                        {mlStatus.training_data?.ai_win_rate === 'ERROR' ? 'ERROR' : `${mlStatus.training_data?.ai_win_rate || 0}%`}
-                                                    </span>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--text-muted)' }}>Online Games</span>
-                                                    <span style={mlStatus.training_data?.online_games === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                                        {mlStatus.training_data?.online_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.online_games || 0)}
-                                                    </span>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ color: 'var(--text-muted)' }}>Total</span>
-                                                    <span style={mlStatus.training_data?.total_games === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                                        {mlStatus.training_data?.total_games === 'ERROR' ? 'ERROR' : (mlStatus.training_data?.total_games || 0)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {!mlStatus.config?.current_model && (
-                                            <button className="btn btn-primary" onClick={uploadOriginalModel} style={{ marginTop: '1rem' }}>
-                                                Upload Original Model to Firebase
-                                            </button>
-                                        )}
-
-                                        {/* Model Management Actions */}
-                                        {mlStatus.config?.current_model && (
-                                            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)' }}>
-                                                <h4 style={{ marginBottom: '0.75rem' }}>ML Model Management</h4>
-                                                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                                                    <button className="btn btn-secondary" onClick={uploadModelFile} style={{ flex: '1 1 auto', pointerEvents: 'all' }}>
-                                                        📁 Upload New Model
+                                                {!mlStatus.config?.current_model && (
+                                                    <button className="btn btn-primary" onClick={uploadOriginalModel} style={{ marginTop: '1rem' }}>
+                                                        Upload Original Model to Firebase
                                                     </button>
-                                                    <button
-                                                        className="btn btn-primary"
-                                                        onClick={startABTest}
-                                                        disabled={mlStatus.config?.ab_test_active}
-                                                        style={{ flex: '1 1 auto', opacity: mlStatus.config?.ab_test_active ? 0.5 : 1, pointerEvents: mlStatus.config?.ab_test_active ? 'none' : 'all' }}
-                                                    >
-                                                        🧪 Start A/B Test
-                                                    </button>
-                                                </div>
-                                                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                                                    Upload improved_model.pkl and start testing against the current model
-                                                </p>
-                                            </div>
-                                        )}
+                                                )}
 
-                                        {/* ML Win Rate Chart */}
-                                        {mlStatus.historical_win_rates && mlStatus.historical_win_rates.length > 0 ? (
-                                            <WinRateChart mlStatus={mlStatus} chartTimeframe={chartTimeframe} setChartTimeframe={setChartTimeframe} />
-                                        ) : null}
+                                                {/* Model Management Actions */}
+                                                {mlStatus.config?.current_model && (
+                                                    <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)' }}>
+                                                        <h4 style={{ marginBottom: '0.75rem' }}>ML Model Management</h4>
+                                                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                                            <button className="btn btn-secondary" onClick={uploadModelFile} style={{ flex: '1 1 auto', pointerEvents: 'auto' }}>
+                                                                📁 Upload New Model
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-primary"
+                                                                onClick={startABTest}
+                                                                disabled={mlStatus.config?.ab_test_active}
+                                                                style={{ flex: '1 1 auto', opacity: mlStatus.config?.ab_test_active ? 0.5 : 1, pointerEvents: mlStatus.config?.ab_test_active ? 'none' : 'auto' }}
+                                                            >
+                                                                🧪 Start A/B Test
+                                                            </button>
+                                                        </div>
+                                                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                                                            Upload improved_model.pkl and start testing against the current model
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* ML Win Rate Chart */}
+                                                {mlStatus.historical_win_rates && mlStatus.historical_win_rates.length > 0 ? (
+                                                    <WinRateChart mlStatus={mlStatus} chartTimeframe={chartTimeframe} setChartTimeframe={setChartTimeframe} />
+                                                ) : null}
+                                            </div>
+                                        ) : (
+                                            <p style={{ color: 'var(--text-muted)' }}>ML status not available. The /api/ml_manage endpoint may not be deployed.</p>
+                                        )}
                                     </div>
-                                    ) : (
-                                    <p style={{ color: 'var(--text-muted)' }}>ML status not available. The /api/ml_manage endpoint may not be deployed.</p>
-                                        )}
-                                </div>
                                 </div>
                             )}
 
-                    {activeTab === 'overview' && (
-                        <>
-                            <div style={{ marginBottom: '1rem', padding: '0.5rem 0' }}>
-                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                    Statistics (Since Jan 1, 2026)
-                                </span>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                                <div className="home-card" style={{ cursor: 'default' }}>
-                                    <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
-                                    <p className="home-card-desc">Unique Visitors</p>
+                            {activeTab === 'overview' && (
+                                <>
+                                    <div style={{ marginBottom: '1rem', padding: '0.5rem 0' }}>
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                            Statistics (Since Jan 1, 2026)
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
+                                            <p className="home-card-desc">Unique Visitors</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title" style={stats.aiWinRate === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.aiWinRate === 'ERROR' ? 'ERROR' : `${stats.aiWinRate || 0}%`}
+                                            </h2>
+                                            <p className="home-card-desc">AI Win Rate (Since 2026)</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title" style={stats.aiGames === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.aiGames === 'ERROR' ? 'ERROR' : (stats.aiGames || 0)}
+                                            </h2>
+                                            <p className="home-card-desc">Total AI Games</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
+                                            <p className="home-card-desc">Avg Rounds/Game</p>
+                                        </div>
+                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                            <h2 className="home-card-title" style={stats.totalOnlineGames === 'ERROR' ? { color: '#ef4444' } : {}}>
+                                                {stats.totalOnlineGames === 'ERROR' ? 'ERROR' : (stats.totalOnlineGames || 0)}
+                                            </h2>
+                                            <p className="home-card-desc">Online Games</p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {activeTab === 'ai-games' && (
+                                <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Outcome</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>User ID</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>ML Bot Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Bot ID</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {stats.aiGamesList && stats.aiGamesList.map((game, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === 'ai' ? 'var(--fire-red)' : '#22c55e' }}>
+                                                        {game.winner === 'ai' ? 'AI Won' : 'Human Won'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.playerMoves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--accent-purple)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                                                        {game.userId ? (game.userId.length > 16 ? game.userId.slice(0, 16) + '...' : game.userId) : 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.aiMoves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--fire-orange)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                                                        {game.modelId || 'A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {(!stats.aiGamesList || stats.aiGamesList.length === 0) && (
+                                                <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div className="home-card" style={{ cursor: 'default' }}>
-                                    <h2 className="home-card-title" style={stats.aiWinRate === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                        {stats.aiWinRate === 'ERROR' ? 'ERROR' : `${stats.aiWinRate || 0}%`}
-                                    </h2>
-                                    <p className="home-card-desc">AI Win Rate (Since 2026)</p>
+                            )}
+
+                            {activeTab === 'online-games' && (
+                                <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 1</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 2</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Winner</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P1 Moves</th>
+                                                <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P2 Moves</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {stats.onlineGamesList && stats.onlineGamesList.map((game, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player1 ? '#22c55e' : 'inherit' }}>{game.player1}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player2 ? '#22c55e' : 'inherit' }}>{game.player2}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: '#22c55e' }}>{game.winner}</td>
+                                                    <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.player1Moves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {game.player2Moves?.join(', ') || 'N/A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {(!stats.onlineGamesList || stats.onlineGamesList.length === 0) && (
+                                                <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div className="home-card" style={{ cursor: 'default' }}>
-                                    <h2 className="home-card-title" style={stats.aiGames === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                        {stats.aiGames === 'ERROR' ? 'ERROR' : (stats.aiGames || 0)}
-                                    </h2>
-                                    <p className="home-card-desc">Total AI Games</p>
-                                </div>
-                                <div className="home-card" style={{ cursor: 'default' }}>
-                                    <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
-                                    <p className="home-card-desc">Avg Rounds/Game</p>
-                                </div>
-                                <div className="home-card" style={{ cursor: 'default' }}>
-                                    <h2 className="home-card-title" style={stats.totalOnlineGames === 'ERROR' ? { color: '#ef4444' } : {}}>
-                                        {stats.totalOnlineGames === 'ERROR' ? 'ERROR' : (stats.totalOnlineGames || 0)}
-                                    </h2>
-                                    <p className="home-card-desc">Online Games</p>
-                                </div>
-                            </div>
+                            )}
                         </>
-                    )}
-
-                    {activeTab === 'ai-games' && (
-                        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Outcome</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player Moves</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>User ID</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>ML Bot Moves</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Bot ID</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {stats.aiGamesList && stats.aiGamesList.map((game, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: game.winner === 'ai' ? 'var(--fire-red)' : '#22c55e' }}>
-                                                {game.winner === 'ai' ? 'AI Won' : 'Human Won'}
-                                            </td>
-                                            <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                                                {game.playerMoves?.join(', ') || 'N/A'}
-                                            </td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--accent-purple)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                                                {game.userId ? (game.userId.length > 16 ? game.userId.slice(0, 16) + '...' : game.userId) : 'N/A'}
-                                            </td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                                                {game.aiMoves?.join(', ') || 'N/A'}
-                                            </td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--fire-orange)', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                                                {game.modelId || 'A'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {(!stats.aiGamesList || stats.aiGamesList.length === 0) && (
-                                        <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {activeTab === 'online-games' && (
-                        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Timestamp</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 1</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Player 2</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Winner</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>Rounds</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P1 Moves</th>
-                                        <th style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>P2 Moves</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {stats.onlineGamesList && stats.onlineGamesList.map((game, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{game.timestamp || 'N/A'}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player1 ? '#22c55e' : 'inherit' }}>{game.player1}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: game.winner === game.player2 ? '#22c55e' : 'inherit' }}>{game.player2}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: '#22c55e' }}>{game.winner}</td>
-                                            <td style={{ padding: '0.75rem 1rem' }}>{game.turns}</td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                                                {game.player1Moves?.join(', ') || 'N/A'}
-                                            </td>
-                                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                                                {game.player2Moves?.join(', ') || 'N/A'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {(!stats.onlineGamesList || stats.onlineGamesList.length === 0) && (
-                                        <tr><td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No games yet</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </>
-            ) : (
-                <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{stats?.error || 'Error loading stats'}</p>
-            )
-        }
+                    ) : (
+                        <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{stats?.error || 'Error loading stats'}</p>
+                    )
+                    }
                 </div >
             );
         }
