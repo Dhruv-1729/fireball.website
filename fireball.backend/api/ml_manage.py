@@ -126,14 +126,69 @@ def get_training_data_stats():
         # Cutoff date: January 1, 2026 00:00:00 UTC
         cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         
-        # Count AI vs Human games from 2026 onwards (no limit for accurate count)
-        ai_games = list(db.collection('ai_vs_human_matches').where('timestamp', '>=', cutoff_date).stream())
-        ai_game_count = len(ai_games)
-        ai_wins = sum(1 for g in ai_games if g.to_dict().get('winner') == 'ai')
+        # Count AI vs Human games from 2026 onwards (single field query - no composite index needed)
+        ai_game_count = 0
+        ai_wins = 0
+        try:
+            ai_games = list(db.collection('ai_vs_human_matches').where('timestamp', '>=', cutoff_date).stream())
+            ai_game_count = len(ai_games)
+            ai_wins = sum(1 for g in ai_games if g.to_dict().get('winner') == 'ai')
+        except Exception as ai_err:
+            print(f"AI games query failed: {ai_err}")
+            # Fallback: get all and filter in Python
+            try:
+                all_ai_games = list(db.collection('ai_vs_human_matches').stream())
+                for doc in all_ai_games:
+                    game = doc.to_dict()
+                    ts = game.get('timestamp')
+                    if ts:
+                        try:
+                            if hasattr(ts, 'timestamp'):
+                                if ts.timestamp() >= cutoff_date.timestamp():
+                                    ai_game_count += 1
+                                    if game.get('winner') == 'ai':
+                                        ai_wins += 1
+                            elif hasattr(ts, 'replace'):
+                                ts_utc = ts.replace(tzinfo=timezone.utc)
+                                if ts_utc >= cutoff_date:
+                                    ai_game_count += 1
+                                    if game.get('winner') == 'ai':
+                                        ai_wins += 1
+                        except:
+                            pass
+            except Exception as fallback_err:
+                print(f"AI games fallback also failed: {fallback_err}")
         
-        # Count online games from 2026 onwards (no limit for accurate count)
-        online_games = list(db.collection('matches').where('created_at', '>=', cutoff_date).where('status', '==', 'finished').stream())
-        online_game_count = len(online_games)
+        # Count online games - avoid compound query, filter status in Python
+        online_game_count = 0
+        try:
+            # First try single-field query on created_at
+            online_games = list(db.collection('matches').where('created_at', '>=', cutoff_date).stream())
+            # Filter by status in Python to avoid composite index requirement
+            online_game_count = sum(1 for doc in online_games if doc.to_dict().get('status') == 'finished')
+        except Exception as online_err:
+            print(f"Online games query failed: {online_err}")
+            # Fallback: get all and filter in Python
+            try:
+                all_matches = list(db.collection('matches').stream())
+                for doc in all_matches:
+                    match = doc.to_dict()
+                    if match.get('status') != 'finished':
+                        continue
+                    ts = match.get('created_at')
+                    if ts:
+                        try:
+                            if hasattr(ts, 'timestamp'):
+                                if ts.timestamp() >= cutoff_date.timestamp():
+                                    online_game_count += 1
+                            elif hasattr(ts, 'replace'):
+                                ts_utc = ts.replace(tzinfo=timezone.utc)
+                                if ts_utc >= cutoff_date:
+                                    online_game_count += 1
+                        except:
+                            pass
+            except Exception as fallback_err:
+                print(f"Online games fallback also failed: {fallback_err}")
         
         return {
             'ai_vs_human_games': ai_game_count,

@@ -6,7 +6,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
 
-# PST timezone (UTC-8)
+
 PST = timezone(timedelta(hours=-8))
 
 # Initialize Firebase
@@ -134,28 +134,46 @@ class handler(BaseHTTPRequestHandler):
             ai_wins = sum(1 for g in ai_games if g['winner'] == 'ai')
             total_turns = sum(g['turns'] for g in ai_games)
             
-            # Get TOTAL count and GLOBAL win rate (efficiently) - only from 2026 onwards
-            total_ai_games = "ERROR"
-            win_rate = "ERROR"
+            # Get TOTAL count and GLOBAL win rate - only from 2026 onwards
+            # Use single-field query on timestamp, then filter winner in Python to avoid composite index
+            total_ai_games = 0
+            win_rate = 0
             try:
-                # Try using count() aggregation first (requires index)
-                total_ai_games = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).count().get()[0][0].value
-                total_ai_wins = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).where("winner", "==", "ai").count().get()[0][0].value
+                # Single-field query - no composite index needed
+                all_games_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).stream()
+                all_games_list = list(all_games_ref)
+                total_ai_games = len(all_games_list)
+                total_ai_wins = sum(1 for doc in all_games_list if doc.to_dict().get('winner') == 'ai')
                 win_rate = (total_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
-                print(f"Count query success: {total_ai_games} games, {total_ai_wins} wins")
+                print(f"AI stats success: {total_ai_games} games, {total_ai_wins} wins")
             except Exception as count_err:
-                print(f"Count query failed (likely missing index): {count_err}")
-                # Fallback: fetch all documents and count in Python (more expensive but works)
+                print(f"AI stats query failed: {count_err}")
+                # Ultimate fallback: get all AI games and filter by timestamp in Python
                 try:
-                    all_games_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).stream()
-                    all_games_list = list(all_games_ref)
-                    total_ai_games = len(all_games_list)
-                    total_ai_wins = sum(1 for doc in all_games_list if doc.to_dict().get('winner') == 'ai')
+                    all_games_ref = db.collection("ai_vs_human_matches").stream()
+                    for doc in all_games_ref:
+                        game = doc.to_dict()
+                        ts = game.get('timestamp')
+                        if ts:
+                            try:
+                                is_after_cutoff = False
+                                if hasattr(ts, 'timestamp'):
+                                    is_after_cutoff = ts.timestamp() >= cutoff_date.timestamp()
+                                elif hasattr(ts, 'replace'):
+                                    ts_utc = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+                                    is_after_cutoff = ts_utc >= cutoff_date
+                                if is_after_cutoff:
+                                    total_ai_games += 1
+                                    if game.get('winner') == 'ai':
+                                        total_ai_wins += 1
+                            except:
+                                pass
                     win_rate = (total_ai_wins / total_ai_games) * 100 if total_ai_games > 0 else 0
-                    print(f"Fallback count success: {total_ai_games} games, {total_ai_wins} wins")
+                    print(f"AI stats fallback success: {total_ai_games} games")
                 except Exception as fallback_err:
-                    print(f"CRITICAL: Both count methods failed: {fallback_err}")
-                    # Leave as "ERROR" - don't show misleading data
+                    print(f"CRITICAL: AI stats fallback failed: {fallback_err}")
+                    total_ai_games = "ERROR"
+                    win_rate = "ERROR"
             
             avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
@@ -164,17 +182,20 @@ class handler(BaseHTTPRequestHandler):
             games_to_delete = []  # Track games with N/A moves to delete
             try:
                 # Get finished, terminated or disconnected matches from 2026 onwards
+                # Use single-field query on created_at, then filter status in Python to avoid composite index
                 target_statuses = ["finished", "terminated", "disconnected"]
-                matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "in", target_statuses).order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
-                
-                # Check if it works (Firestore might complain about composite index for created_at + status)
+                results = []
                 try:
-                    results = list(matches_ref)
-                except Exception as e:
-                    print(f"Ordered query failed, falling back to simpler query: {e}")
-                    # Fallback: get all from 2026 and filter by status in Python
                     matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).order_by("created_at", direction=firestore.Query.DESCENDING).limit(200).stream()
+                    # Filter by status in Python to avoid composite index requirement
                     results = [doc for doc in matches_ref if doc.to_dict().get('status') in target_statuses][:100]
+                except Exception as e:
+                    print(f"Order query failed, trying without order: {e}")
+                    # Fallback: no ordering (avoids ordering index requirement)
+                    matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).stream()
+                    results = sorted([doc for doc in matches_ref if doc.to_dict().get('status') in target_statuses], 
+                                   key=lambda d: d.to_dict().get('created_at', 0) if d.to_dict().get('created_at') else 0, 
+                                   reverse=True)[:100]
 
                 for doc in results:
                     match = doc.to_dict()
@@ -231,19 +252,39 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 print(f"Online games retrieval error: {e}")
 
-            # Get total online games count (excluding deleted ones)
-            total_online_count = "ERROR"
+            # Get total online games count - use single-field query and filter status in Python
+            total_online_count = 0
             try:
-                total_online_count = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "==", "finished").count().get()[0][0].value
+                # Single-field query on created_at, filter status in Python to avoid composite index
+                online_ref = db.collection("matches").where("created_at", ">=", cutoff_date).stream()
+                total_online_count = sum(1 for doc in online_ref if doc.to_dict().get('status') == 'finished')
+                print(f"Online count success: {total_online_count} finished games")
             except Exception as online_count_err:
                 print(f"Online count query failed: {online_count_err}")
-                # Fallback: fetch and count in Python
+                # Ultimate fallback: get all matches and filter in Python
                 try:
-                    online_ref = db.collection("matches").where("created_at", ">=", cutoff_date).where("status", "==", "finished").stream()
-                    total_online_count = sum(1 for _ in online_ref)
+                    all_matches = db.collection("matches").stream()
+                    for doc in all_matches:
+                        match = doc.to_dict()
+                        if match.get('status') != 'finished':
+                            continue
+                        ts = match.get('created_at')
+                        if ts:
+                            try:
+                                is_after_cutoff = False
+                                if hasattr(ts, 'timestamp'):
+                                    is_after_cutoff = ts.timestamp() >= cutoff_date.timestamp()
+                                elif hasattr(ts, 'replace'):
+                                    ts_utc = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+                                    is_after_cutoff = ts_utc >= cutoff_date
+                                if is_after_cutoff:
+                                    total_online_count += 1
+                            except:
+                                pass
+                    print(f"Online count fallback success: {total_online_count}")
                 except Exception as online_fallback_err:
                     print(f"CRITICAL: Online count fallback failed: {online_fallback_err}")
-                    # Leave as "ERROR"
+                    total_online_count = "ERROR"
 
             stats = {
                 "uniqueVisitors": unique_visitor_count,

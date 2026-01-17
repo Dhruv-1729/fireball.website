@@ -142,6 +142,15 @@
             border-color: var(--fire-orange);
         }
 
+        /* Static version without hover effects for admin panels */
+        .home-card-static {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            cursor: default;
+        }
+
         .home-card-title {
             font-size: 1.25rem;
             font-weight: 700;
@@ -1677,7 +1686,7 @@
 
                             {activeTab === 'settings' && (
                                 <div style={{ display: 'grid', gap: '1.5rem' }}>
-                                    <div className="home-card" style={{ cursor: 'default', padding: '1.5rem' }}>
+                                    <div className="home-card-static" style={{ padding: '1.5rem' }}>
                                         <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>Site Settings</h3>
                                         <div style={{ display: 'grid', gap: '1rem' }}>
                                             <div style={{
@@ -1713,7 +1722,7 @@
 
                             {activeTab === 'ml-status' && (
                                 <div style={{ display: 'grid', gap: '1.5rem' }}>
-                                    <div className="home-card" style={{ cursor: 'default', padding: '1.5rem', pointerEvents: 'none' }}>
+                                    <div className="home-card-static" style={{ padding: '1.5rem' }}>
                                         <h3 style={{ marginBottom: '1rem', color: 'var(--fire-orange)' }}>ML Training System</h3>
                                         {mlStatus ? (
                                             <div style={{ display: 'grid', gap: '0.75rem', fontSize: '0.9rem' }}>
@@ -1764,7 +1773,7 @@
                                                                 onClick={concludeABTest}
                                                                 style={{ marginTop: '1rem', width: '100%', pointerEvents: 'auto' }}
                                                             >
-                                                                ✓ Choose Winner & End Test
+                                                                Choose Winner & End Test
                                                             </button>
                                                         </div>
                                                     </>
@@ -1817,7 +1826,7 @@
                                                         <h4 style={{ marginBottom: '0.75rem' }}>ML Model Management</h4>
                                                         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                                                             <button className="btn btn-secondary" onClick={uploadModelFile} style={{ flex: '1 1 auto', pointerEvents: 'auto' }}>
-                                                                📁 Upload New Model
+                                                                Upload New Model
                                                             </button>
                                                             <button
                                                                 className="btn btn-primary"
@@ -1825,7 +1834,7 @@
                                                                 disabled={mlStatus.config?.ab_test_active}
                                                                 style={{ flex: '1 1 auto', opacity: mlStatus.config?.ab_test_active ? 0.5 : 1, pointerEvents: mlStatus.config?.ab_test_active ? 'none' : 'auto' }}
                                                             >
-                                                                🧪 Start A/B Test
+                                                                Start A/B Test
                                                             </button>
                                                         </div>
                                                         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
@@ -1850,31 +1859,31 @@
                                 <>
                                     <div style={{ marginBottom: '1rem', padding: '0.5rem 0' }}>
                                         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                            Statistics (Since Jan 1, 2026)
+                                            Statistics
                                         </span>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                        <div className="home-card-static">
                                             <h2 className="home-card-title">{stats.uniqueVisitors || 0}</h2>
                                             <p className="home-card-desc">Unique Visitors</p>
                                         </div>
-                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                        <div className="home-card-static">
                                             <h2 className="home-card-title" style={stats.aiWinRate === 'ERROR' ? { color: '#ef4444' } : {}}>
                                                 {stats.aiWinRate === 'ERROR' ? 'ERROR' : `${stats.aiWinRate || 0}%`}
                                             </h2>
-                                            <p className="home-card-desc">AI Win Rate (Since 2026)</p>
+                                            <p className="home-card-desc">AI Win Rate</p>
                                         </div>
-                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                        <div className="home-card-static">
                                             <h2 className="home-card-title" style={stats.aiGames === 'ERROR' ? { color: '#ef4444' } : {}}>
                                                 {stats.aiGames === 'ERROR' ? 'ERROR' : (stats.aiGames || 0)}
                                             </h2>
                                             <p className="home-card-desc">Total AI Games</p>
                                         </div>
-                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                        <div className="home-card-static">
                                             <h2 className="home-card-title">{stats.avgMatchLength || 0}</h2>
                                             <p className="home-card-desc">Avg Rounds/Game</p>
                                         </div>
-                                        <div className="home-card" style={{ cursor: 'default' }}>
+                                        <div className="home-card-static">
                                             <h2 className="home-card-title" style={stats.totalOnlineGames === 'ERROR' ? { color: '#ef4444' } : {}}>
                                                 {stats.totalOnlineGames === 'ERROR' ? 'ERROR' : (stats.totalOnlineGames || 0)}
                                             </h2>
