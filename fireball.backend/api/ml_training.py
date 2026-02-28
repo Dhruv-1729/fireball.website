@@ -89,6 +89,7 @@ class FireballQLearning:
         if charges >= 5:
             moves.append("megaball")
         return moves
+    
 
     def choose_action(self, state, legal_moves, training=True):
         """Choose action using epsilon-greedy policy."""
@@ -102,6 +103,7 @@ class FireballQLearning:
     def to_dict(self):
         """Convert Q-table to serializable dict."""
         return {k: dict(v) for k, v in self.q_table.items()}
+    
 
     def from_dict(self, data):
         """Load Q-table from dict."""

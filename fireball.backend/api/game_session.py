@@ -278,22 +278,39 @@ def record_game_result_and_check_ab(model_id, ai_won, config):
     updates = {
         'games_since_last_training': config.get('games_since_last_training', 0) + 1
     }
+
+    # Get the required games limit
+    # Use the value from config if available, otherwise default
+    limit = config.get('ab_test_games_required', AB_TEST_GAMES_REQUIRED)
+    
+    current_a_games = config.get('model_a_games', 0)
+    current_b_games = config.get('model_b_games', 0)
     
     if model_id == 'A':
-        updates['model_a_games'] = config.get('model_a_games', 0) + 1
-        if ai_won:
-            updates['model_a_wins'] = config.get('model_a_wins', 0) + 1
+        # ONLY count stats if we haven't reached the limit yet
+        if current_a_games < limit:
+            updates['model_a_games'] = current_a_games + 1
+            if ai_won:
+                updates['model_a_wins'] = config.get('model_a_wins', 0) + 1
     elif model_id == 'B':
-        updates['model_b_games'] = config.get('model_b_games', 0) + 1
-        if ai_won:
-            updates['model_b_wins'] = config.get('model_b_wins', 0) + 1
+        # ONLY count stats if we haven't reached the limit yet
+        if current_b_games < limit:
+            updates['model_b_games'] = current_b_games + 1
+            if ai_won:
+                updates['model_b_wins'] = config.get('model_b_wins', 0) + 1
     
+    # Always update the configuration (at minimum for games_since_last_training)
     update_ml_config(updates)
     
-    a_games = (config.get('model_a_games', 0) + (1 if model_id == 'A' else 0))
-    b_games = (config.get('model_b_games', 0) + (1 if model_id == 'B' else 0))
+    # Check if we can conclude - using the NEW values
+    final_a_games = updates.get('model_a_games', current_a_games)
+    final_b_games = updates.get('model_b_games', current_b_games)
     
-    if a_games >= AB_TEST_GAMES_REQUIRED and b_games >= AB_TEST_GAMES_REQUIRED:
+    # Only conclude if BOTH models have reached the limit
+    if final_a_games >= limit and final_b_games >= limit:
+        # Pass the updated config-like object for the conclusion
+        # We need to make sure conclude_ab_test sees the final state
+        # But conclude_ab_test calls get_ml_config() itself, so it will see the updates we just made.
         conclude_ab_test(config, model_id, ai_won)
 
 
