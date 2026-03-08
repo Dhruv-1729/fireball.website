@@ -2616,6 +2616,15 @@
         }, 1000);
         return () => clearInterval(checkTimeout);
       }, [myMoveSubmitted, moveSubmitTime, pollInterval]);
+      // Safety-net polling: after submitting a move, poll every 2s to catch turn resolution
+      // in case the Firestore real-time listener doesn't fire
+      useEffect(() => {
+        if (!myMoveSubmitted || !matchId) return;
+        const safetyPoll = setInterval(() => {
+          fetchGameState(matchId);
+        }, 2000);
+        return () => clearInterval(safetyPoll);
+      }, [myMoveSubmitted, matchId]);
       useEffect(() => {
         if (gameState?.turn) {
           setMyMoveSubmitted(false);
@@ -2801,7 +2810,7 @@
         setSelectedMove(move);
         setMoveSubmitTime(Date.now());
         try {
-          await fetch('/api/matchmaking', {
+          const res = await fetch('/api/matchmaking', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -2813,6 +2822,12 @@
               move
             })
           });
+          const result = await res.json();
+          // If the turn was resolved (both players submitted), immediately fetch updated state
+          if (result.status === 'resolved') {
+            console.log('Turn resolved on submit, fetching updated state');
+            await fetchGameState(matchId);
+          }
         } catch (e) {
           console.error('Submit move error:', e);
         }
