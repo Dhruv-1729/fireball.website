@@ -229,28 +229,76 @@ class handler(BaseHTTPRequestHandler):
         move = data.get('move')
 
         match_ref = db.collection('matches').document(match_id)
-        match_doc = match_ref.get()
 
-        if not match_doc.exists:
-            return {'error': 'Match not found'}
+        @firestore.transactional
+        def submit_in_transaction(transaction):
+            match_doc = match_ref.get(transaction=transaction)
+            if not match_doc.exists:
+                return {'error': 'Match not found'}
 
-        match = match_doc.to_dict()
+            match = match_doc.to_dict()
 
-        if match['player1'] == player_id:
-            match_ref.update({'player1_move': move})
-        elif match['player2'] == player_id:
-            match_ref.update({'player2_move': move})
-        else:
-            return {'error': 'Not a participant'}
+            if match['player1'] == player_id:
+                player_field = 'player1_move'
+            elif match['player2'] == player_id:
+                player_field = 'player2_move'
+            else:
+                return {'error': 'Not a participant'}
 
-        # Check if both moves submitted
-        match = match_ref.get().to_dict()
+            # Set the move in our local copy to check if both are in
+            match[player_field] = move
 
-        if match['player1_move'] and match['player2_move']:
-            result = self.resolve_turn(match_ref, match)
-            return {'status': 'resolved', 'result': result}
+            if match['player1_move'] and match['player2_move']:
+                # Both moves submitted — resolve the turn atomically
+                p1_move = match['player1_move']
+                p2_move = match['player2_move']
 
-        return {'status': 'waiting_for_opponent'}
+                costs = {'charge': -1, 'fireball': 1, 'iceball': 2, 'megaball': 5, 'shield': 0}
+                p1_charges = max(0, match['player1_charges'] - costs.get(p1_move, 0))
+                p2_charges = max(0, match['player2_charges'] - costs.get(p2_move, 0))
+
+                winner = determine_winner(p1_move, p2_move)
+
+                p1_moves_history = match.get('player1_moves', []) + [p1_move]
+                p2_moves_history = match.get('player2_moves', []) + [p2_move]
+
+                update_data = {
+                    'player1_charges': p1_charges,
+                    'player2_charges': p2_charges,
+                    'player1_move': None,
+                    'player2_move': None,
+                    'player1_moves': p1_moves_history,
+                    'player2_moves': p2_moves_history,
+                    'turn': match['turn'] + 1,
+                    'last_p1_move': p1_move,
+                    'last_p2_move': p2_move,
+                    'last_result': winner
+                }
+
+                if winner in ['player1', 'player2']:
+                    update_data['status'] = 'finished'
+                    update_data['winner'] = winner
+                    update_data['finished_at'] = firestore.SERVER_TIMESTAMP
+
+                transaction.update(match_ref, update_data)
+
+                return {
+                    'status': 'resolved',
+                    'result': {
+                        'p1_move': p1_move,
+                        'p2_move': p2_move,
+                        'winner': winner,
+                        'p1_charges': p1_charges,
+                        'p2_charges': p2_charges
+                    }
+                }
+            else:
+                # Only this player's move so far
+                transaction.update(match_ref, {player_field: move})
+                return {'status': 'waiting_for_opponent'}
+
+        transaction = db.transaction()
+        return submit_in_transaction(transaction)
 
     def resolve_turn(self, match_ref, match):
         p1_move = match['player1_move']
@@ -300,12 +348,19 @@ class handler(BaseHTTPRequestHandler):
         match_id = data.get('matchId')
         player_id = data.get('playerId')
 
-        match_doc = db.collection('matches').document(match_id).get()
+        match_ref = db.collection('matches').document(match_id)
+        match_doc = match_ref.get()
 
         if not match_doc.exists:
             return {'error': 'Match not found'}
 
         match = match_doc.to_dict()
+
+        # Safety net: if both moves are in but the turn was never resolved
+        # (e.g. due to a past race condition), resolve it now
+        if match.get('player1_move') and match.get('player2_move') and match.get('status') == 'active':
+            self.resolve_turn(match_ref, match)
+            match = match_ref.get().to_dict()
 
         is_player1 = match['player1'] == player_id
         opponent_submitted = (match['player2_move'] is not None) if is_player1 else (match['player1_move'] is not None)
