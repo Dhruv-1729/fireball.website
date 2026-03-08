@@ -2572,6 +2572,7 @@
       const [showEndOverlay, setShowEndOverlay] = useState(true);
       const [selectedMove, setSelectedMove] = useState(null);
       const prevGameStatusRef = useRef(null); // Use ref to track previous status (avoids stale closure)
+      const moveSubmittedAtTurnRef = useRef(null); // Track turn number when move was submitted
 
       useEffect(() => {
         if (status !== 'searching') {
@@ -2626,10 +2627,12 @@
         return () => clearInterval(safetyPoll);
       }, [myMoveSubmitted, matchId]);
       useEffect(() => {
-        if (gameState?.turn) {
+        if (gameState?.turn && moveSubmittedAtTurnRef.current !== null && gameState.turn > moveSubmittedAtTurnRef.current) {
+          console.log('Turn advanced from', moveSubmittedAtTurnRef.current, 'to', gameState.turn, '- resetting move state');
           setMyMoveSubmitted(false);
           setMoveSubmitTime(null);
           setSelectedMove(null);
+          moveSubmittedAtTurnRef.current = null;
         }
       }, [gameState?.turn]);
       const findMatch = async () => {
@@ -2725,6 +2728,14 @@
                     opponent: isPlayer1 ? match.player2_username : match.player1_username
                   };
                   setGameState(newGameState);
+                  // Directly reset move state when Firestore listener detects turn change
+                  if (moveSubmittedAtTurnRef.current !== null && newGameState.turn > moveSubmittedAtTurnRef.current) {
+                    console.log('Firestore listener: turn advanced, resetting move state');
+                    setMyMoveSubmitted(false);
+                    setMoveSubmitTime(null);
+                    setSelectedMove(null);
+                    moveSubmittedAtTurnRef.current = null;
+                  }
                   if (newGameState.lastResult && newGameState.lastMyMove) {
                     setHistory(prev => {
                       if (prev.length === 0 || prev[0].you !== newGameState.lastMyMove || prev[0].opp !== newGameState.lastOpponentMove) {
@@ -2780,6 +2791,14 @@
           });
           const data = await res.json();
           setGameState(data);
+          // Directly check: if turn has advanced past when we submitted, reset move state
+          if (moveSubmittedAtTurnRef.current !== null && data.turn > moveSubmittedAtTurnRef.current) {
+            console.log('fetchGameState: turn advanced, resetting move state');
+            setMyMoveSubmitted(false);
+            setMoveSubmitTime(null);
+            setSelectedMove(null);
+            moveSubmittedAtTurnRef.current = null;
+          }
           if (data.lastResult && data.lastMyMove) {
             setHistory(prev => {
               if (prev.length === 0 || prev[0].you !== data.lastMyMove || prev[0].opp !== data.lastOpponentMove) {
@@ -2809,6 +2828,7 @@
         setMyMoveSubmitted(true);
         setSelectedMove(move);
         setMoveSubmitTime(Date.now());
+        moveSubmittedAtTurnRef.current = gameState?.turn || 1;
         try {
           const res = await fetch('/api/matchmaking', {
             method: 'POST',
@@ -2867,6 +2887,7 @@
         setShowNoPlayersWarning(false);
         setShowEndOverlay(true);
         prevGameStatusRef.current = null;
+        moveSubmittedAtTurnRef.current = null;
       };
       useEffect(() => {
         return () => {
