@@ -10,8 +10,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -419,6 +418,7 @@
         opacity: 0;
         transform: translate(-50%, -48%);
       }
+
       to {
         opacity: 1;
         transform: translate(-50%, -50%);
@@ -744,8 +744,15 @@
     }
 
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
     }
 
     .waiting-overlay {
@@ -765,8 +772,15 @@
     }
 
     @keyframes fade-pulse {
-      0%, 100% { opacity: 0.5; }
-      50% { opacity: 1; }
+
+      0%,
+      100% {
+        opacity: 0.5;
+      }
+
+      50% {
+        opacity: 1;
+      }
     }
 
     .waiting-dots {
@@ -783,13 +797,29 @@
       animation: dot-pulse 1.4s ease-in-out infinite;
     }
 
-    .waiting-dots span:nth-child(1) { animation-delay: 0s; }
-    .waiting-dots span:nth-child(2) { animation-delay: 0.15s; }
-    .waiting-dots span:nth-child(3) { animation-delay: 0.3s; }
+    .waiting-dots span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .waiting-dots span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .waiting-dots span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
 
     @keyframes dot-pulse {
-      0%, 80%, 100% { opacity: 0.25; }
-      40% { opacity: 1; }
+
+      0%,
+      80%,
+      100% {
+        opacity: 0.25;
+      }
+
+      40% {
+        opacity: 1;
+      }
     }
 
     .warning-box {
@@ -826,9 +856,11 @@
     ::-webkit-scrollbar {
       width: 6px;
     }
+
     ::-webkit-scrollbar-track {
       background: transparent;
     }
+
     ::-webkit-scrollbar-thumb {
       background: var(--color-surface-3);
       border-radius: 3px;
@@ -994,7 +1026,7 @@
         className: "home-title"
       }, "Fireball"), /*#__PURE__*/React.createElement("p", {
         className: "home-subtitle"
-      }, "A charge-based strategy game where you outsmart an ML opponent")), /*#__PURE__*/React.createElement("div", {
+      }, "A fun, strategic, and fast-paced game!")), /*#__PURE__*/React.createElement("div", {
         className: "home-grid"
       }, /*#__PURE__*/React.createElement("div", {
         className: "home-card",
@@ -2407,7 +2439,7 @@
             result: data.result
           }, ...history]);
         } catch (e) {
-          setError('Failed to connect to the AI backend.');
+          setError('Failed to connect to the backend.');
         }
         setLoading(false);
       };
@@ -2480,7 +2512,7 @@
         className: `end-title ${game.winner === 'player1' ? 'win' : 'lose'}`
       }, game.winner === 'player1' ? 'You Win' : 'AI Wins'), /*#__PURE__*/React.createElement("p", {
         className: "end-subtitle"
-      }, game.winner === 'player1' ? 'Nice work! You beat the model!' : 'The AI predicted your moves and beat you!'), /*#__PURE__*/React.createElement("button", {
+      }, game.winner === 'player1' ? 'You beat the model!' : 'The ML model read you like a book!'), /*#__PURE__*/React.createElement("button", {
         className: "btn btn-primary",
         onClick: resetGame
       }, "Play Again")) : /*#__PURE__*/React.createElement("div", {
