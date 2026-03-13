@@ -576,101 +576,19 @@ def conclude_ab_test():
 
 def check_and_trigger_training():
     """
-    Check if training should be triggered based on game count.
-    This is called after each game.
+    Auto-training is disabled. Model updates are manual-only via
+    the admin panel's upload + A/B test workflow.
     """
-    config = get_ml_config()
-    if not config:
-        return False
-    
-    # Master switch check
-    if not config.get('training_enabled', False):
-        return False
-    
-    # Don't train if A/B test is active
-    if config.get('ab_test_active', False):
-        return False
-    
-    # Check game threshold
-    games = config.get('games_since_last_training', 0)
-    if games < GAMES_THRESHOLD_FOR_TRAINING:
-        return False
-    
-    print(f"Training threshold reached ({games} games). Starting training...")
-    
-    # Trigger training
-    trigger_training_pipeline()
-    return True
+    return False
 
 
 def trigger_training_pipeline():
     """
-    Main training pipeline:
-    1. Fetch human game data
-    2. Train new model
-    3. Save as challenger
-    4. Start A/B test
+    DEPRECATED — Auto-training pipeline removed.
+    Use admin panel to upload a new model.pkl and start an A/B test.
     """
-    if not db:
-        print("Database not available")
-        return False
-    
-    try:
-        # Fetch recent human games
-        ai_games = []
-        docs = db.collection('ai_vs_human_matches').order_by(
-            'timestamp', 
-            direction=firestore.Query.DESCENDING
-        ).limit(500).stream()
-        
-        for doc in docs:
-            ai_games.append(doc.to_dict())
-        
-        online_games = []
-        docs = db.collection('matches').where(
-            'status', '==', 'finished'
-        ).limit(500).stream()
-        
-        for doc in docs:
-            online_games.append(doc.to_dict())
-        
-        print(f"Fetched {len(ai_games)} AI games and {len(online_games)} online games")
-        
-        # Load current model as base
-        config = get_ml_config()
-        current_version = config.get('current_model_version', 'v1_original')
-        base_model = load_model_from_firebase(current_version)
-        
-        if not base_model:
-            print("Could not load base model, training from scratch")
-            new_model = train_new_model(episodes=50000)
-        else:
-            # Fine-tune from human games
-            new_model = train_from_human_games(base_model, ai_games)
-        
-        # Save challenger model
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        challenger_version = f'v_challenger_{timestamp}'
-        save_model_to_firebase(new_model, challenger_version)
-        
-        # Start A/B test
-        update_ml_config({
-            'challenger_model_version': challenger_version,
-            'ab_test_active': True,
-            'model_a_games': 0,
-            'model_a_wins': 0,
-            'model_b_games': 0,
-            'model_b_wins': 0,
-            'games_since_last_training': 0,
-            'last_training_timestamp': firestore.SERVER_TIMESTAMP
-        })
-        
-        print(f"Training complete! A/B test started with challenger '{challenger_version}'")
-        return True
-        
-    except Exception as e:
-        print(f"Training pipeline error: {e}")
-        return False
+    print("Auto-training pipeline is disabled. Use admin panel to upload models.")
+    return False
 
 
 # ============================================================

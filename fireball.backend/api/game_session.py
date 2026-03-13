@@ -56,62 +56,139 @@ class FireballQLearning:
             return max(q_vals, key=q_vals.get)
         
         return self._heuristic_action(state, legal_moves)
-    
+
+    @staticmethod
+    def _count_streak(history, move):
+        """Count consecutive occurrences of `move` from the end of history."""
+        streak = 0
+        for m in reversed(history):
+            if m == move:
+                streak += 1
+            else:
+                break
+        return streak
+
     def _heuristic_action(self, state, legal_moves):
+        """Pattern-aware heuristic with anti-exploit logic."""
         try:
             parts = state.split('_')
             my_charges = int(parts[1]) if len(parts) > 1 else 0
             opp_charges = int(parts[3]) if len(parts) > 3 else 0
         except:
             my_charges, opp_charges = 0, 0
-        
+
+        opp_recent = self.opp_move_history[-4:] if self.opp_move_history else []
+        my_recent = self.move_history[-4:] if self.move_history else []
+
+        opp_charge_streak = self._count_streak(opp_recent, 'charge')
+        opp_shield_streak = self._count_streak(opp_recent, 'shield')
+        my_shield_streak = self._count_streak(my_recent, 'shield')
+
+        # 25% aggressive, 75% balanced-but-not-exploitable
+        aggressive = random.random() < 0.25
+
+        # === RULE 0: Megaball is an instant win — always use it ===
         if 'megaball' in legal_moves:
             return 'megaball'
-        
+
+        # === RULE 1: Anti charge-spam ===
+        # Opponent charging repeatedly → they are building to megaball.
+        # Fireball beats charge, iceball beats charge. Punish immediately.
+        if opp_charge_streak >= 2:
+            if opp_charges >= 4:
+                # CRITICAL: they megaball next turn if we don't act
+                if 'iceball' in legal_moves:
+                    return 'iceball'
+                if 'fireball' in legal_moves:
+                    return 'fireball'
+            # They've charged 2+ times in a row — likely charging again
+            if 'fireball' in legal_moves:
+                return 'fireball'
+            if 'iceball' in legal_moves:
+                return 'iceball'
+
+        # === RULE 2: Anti shield-loop ===
+        # Opponent spamming shield → attacks are wasted (shield blocks all
+        # except megaball). Build charges toward megaball instead.
+        if opp_shield_streak >= 2:
+            if my_charges >= 4:
+                return 'charge'  # one more → megaball next turn
+            # Don't waste ammo attacking into shields
+            return 'charge'
+
+        # === RULE 3: Break OUR OWN shield loop ===
+        # If we've been shielding too, stop — charge up instead.
+        if my_shield_streak >= 2 and opp_shield_streak >= 1:
+            return 'charge'
+
+        # === RULE 4: Opponent can megaball (5+ charges) ===
+        # Shield is useless vs megaball. Attack to try to end it first.
         if opp_charges >= 5:
             if 'iceball' in legal_moves:
                 return 'iceball'
-            elif 'fireball' in legal_moves:
+            if 'fireball' in legal_moves:
                 return 'fireball'
             return 'charge'
-        
+
+        # === RULE 5: Opponent has 0 charges — they MUST charge ===
+        # Fireball beats charge. Free hit.
         if opp_charges == 0:
             if 'fireball' in legal_moves:
-                return 'fireball' if random.random() < 0.7 else 'charge'
+                prob = 0.85 if aggressive else 0.6
+                return 'fireball' if random.random() < prob else 'charge'
             return 'charge'
-        
-        if my_charges <= 1 and opp_charges >= 2:
-            if random.random() < 0.4:
-                return 'shield'
-            return 'charge'
-        
-        if my_charges > opp_charges and my_charges >= 2:
-            if 'iceball' in legal_moves and random.random() < 0.5:
-                return 'iceball'
-            elif 'fireball' in legal_moves:
+
+        # === RULE 6: Opponent just charged last turn (not a streak) ===
+        # Good chance they'll charge again — punish.
+        if len(opp_recent) > 0 and opp_recent[-1] == 'charge':
+            if 'fireball' in legal_moves:
+                prob = 0.7 if aggressive else 0.45
+                if random.random() < prob:
+                    return 'fireball'
+
+        # === STRATEGIC PLAY (mode-dependent) ===
+        if aggressive:
+            # Aggressive: attack when we have charges
+            if my_charges > opp_charges and my_charges >= 2:
+                if 'iceball' in legal_moves and random.random() < 0.5:
+                    return 'iceball'
+                if 'fireball' in legal_moves:
+                    return 'fireball'
+
+            if opp_charges >= 3 and my_charges <= 1:
+                return 'shield' if random.random() < 0.5 else 'charge'
+
+            if 'fireball' in legal_moves and random.random() < 0.4:
                 return 'fireball'
-        
-        weights = {}
-        for move in legal_moves:
-            if move == 'charge':
-                weights[move] = 0.4
-            elif move == 'shield':
-                weights[move] = 0.15
-            elif move == 'fireball':
-                weights[move] = 0.25
-            elif move == 'iceball':
-                weights[move] = 0.15
-            elif move == 'megaball':
-                weights[move] = 0.05
-        
-        total = sum(weights.get(m, 0.1) for m in legal_moves)
-        r = random.random() * total
-        cumulative = 0
-        for move in legal_moves:
-            cumulative += weights.get(move, 0.1)
-            if r <= cumulative:
-                return move
-        return legal_moves[0]
+
+            return 'charge'
+        else:
+            # Balanced: stay competitive but beatable
+            if my_charges <= 1 and opp_charges >= 3:
+                return 'shield' if random.random() < 0.4 else 'charge'
+
+            if my_charges > opp_charges and my_charges >= 2:
+                if 'iceball' in legal_moves and random.random() < 0.3:
+                    return 'iceball'
+                if 'fireball' in legal_moves and random.random() < 0.35:
+                    return 'fireball'
+
+            # Weighted random fallback — low shield weight to prevent loops
+            weights = {
+                'charge': 0.45,
+                'shield': 0.08,
+                'fireball': 0.30,
+                'iceball': 0.12,
+                'megaball': 0.05
+            }
+            total = sum(weights.get(m, 0.1) for m in legal_moves)
+            r = random.random() * total
+            cumulative = 0
+            for move in legal_moves:
+                cumulative += weights.get(move, 0.1)
+                if r <= cumulative:
+                    return move
+            return legal_moves[0]
 
     def load_model(self, filename):
         try:
