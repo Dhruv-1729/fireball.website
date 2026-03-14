@@ -1572,13 +1572,53 @@
               const CHUNK_SIZE = 700 * 1024;
               const totalChunks = Math.ceil(modelB64.length / CHUNK_SIZE);
               
-              const uploadText = document.createElement('div');
-              uploadText.style.cssText = 'position:fixed;top:10px;right:10px;background:#333;color:white;padding:10px;z-index:9999;';
-              document.body.appendChild(uploadText);
+              const overlay = document.createElement('div');
+              overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.3s ease;';
+              
+              const terminal = document.createElement('div');
+              terminal.style.cssText = 'width:450px;background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,0.5);overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;display:flex;flex-direction:column;transform:scale(0.95);transition:transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
+              
+              // Simulate terminal header
+              const header = document.createElement('div');
+              header.style.cssText = 'background:rgba(255,255,255,0.05);padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:0.5px;';
+              header.innerHTML = '<div style="display:flex;gap:6px"><div style="width:10px;height:10px;border-radius:50%;background:#ff5f56"></div><div style="width:10px;height:10px;border-radius:50%;background:#ffbd2e"></div><div style="width:10px;height:10px;border-radius:50%;background:#27c93f"></div></div><div style="margin-left:8px;user-select:none;">model_deployment_uplink</div>';
+              
+              const logsContainer = document.createElement('div');
+              logsContainer.style.cssText = 'padding:20px;height:180px;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-end;font-size:13px;line-height:1.6;';
+              
+              terminal.appendChild(header);
+              terminal.appendChild(logsContainer);
+              overlay.appendChild(terminal);
+              document.body.appendChild(overlay);
+              
+              // Trigger entrance animation
+              requestAnimationFrame(() => terminal.style.transform = 'scale(1)');
+
+              const appendLog = (msg, color = '#e6edf3') => {
+                const line = document.createElement('div');
+                line.style.cssText = `color:${color};margin-top:4px;opacity:0;animation:fadeUp 0.3s forwards;`;
+                line.innerHTML = `<span style="color:#7ee787;margin-right:8px;">❯</span>${msg}`;
+                
+                // Add keyframes if not exists
+                if (!document.getElementById('terminal-anim')) {
+                  const style = document.createElement('style');
+                  style.id = 'terminal-anim';
+                  style.textContent = '@keyframes fadeUp {from {opacity:0;transform:translateY(4px);} to {opacity:1;transform:translateY(0);}}';
+                  document.head.appendChild(style);
+                }
+                
+                logsContainer.appendChild(line);
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+              };
               
               try {
+                appendLog(`Initializing ML cluster uplink for "${versionName}"...`, '#8b949e');
+                appendLog(`Model size: ${(modelB64.length / 1024 / 1024).toFixed(2)} MB. Optimizing chunks...`, '#8b949e');
+                
                 for (let i = 0; i < totalChunks; i++) {
-                  uploadText.innerHTML = `Uploading chunk ${i+1}/${totalChunks}...`;
+                  const perc = Math.round(((i) / totalChunks) * 100);
+                  appendLog(`Transmit [${perc.toString().padStart(3, ' ')}%]: Sending chunk ${i+1}/${totalChunks}...`, '#a5d6ff');
+                  
                   const chunkStr = modelB64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
                   const res = await fetch('/api/ml_manage', {
                     method: 'POST',
@@ -1600,17 +1640,69 @@
                   }
                   
                   if (i === totalChunks - 1) {
-                    if (confirm(data.message + '\n\nStart A/B test with this model now?')) {
-                      startABTestWithModel(versionName);
-                    } else {
-                      fetchMlStatus();
-                    }
+                    appendLog(`Transmit [100%]: All ${totalChunks} chunks verified.`, '#7ee787');
+                    appendLog(`Stitching model binary in staging environment...`, '#d2a8ff');
+                    
+                    // Small artificial delay for visual finish
+                    await new Promise(r => setTimeout(r, 600));
+                    appendLog(`Success: Model deployed successfully.`, '#7ee787');
+                    await new Promise(r => setTimeout(r, 400));
+                    
+                    
+                    // Create beautiful custom modal window for three choices
+                    await new Promise(resolve => {
+                      const choiceOverlay = document.createElement('div');
+                      choiceOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:10000;opacity:0;transition:opacity 0.3s ease;';
+                      
+                      const choiceBox = document.createElement('div');
+                      choiceBox.style.cssText = 'background:var(--color-surface-1);border:1px solid var(--color-border);border-radius:12px;padding:32px;width:100%;max-width:400px;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);transform:translateY(20px);transition:transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);';
+                      
+                      choiceBox.innerHTML = `
+                        <h3 style="margin-bottom:12px;color:var(--color-text-1);">Staging Complete</h3>
+                        <p style="color:var(--color-text-3);margin-bottom:32px;font-size:14px;line-height:1.5;">Model <strong>${versionName}</strong> is fully uploaded and verified in the staging environment. What would you like to do next?</p>
+                        
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                          <button id="btn-ab-test" class="btn btn-primary" style="width:100%;justify-content:center">Start A/B Test</button>
+                          <button id="btn-override" class="btn btn-secondary" style="width:100%;justify-content:center;border-color:var(--color-red);color:var(--color-red)">Override Current Model</button>
+                          <button id="btn-cancel" class="btn" style="width:100%;justify-content:center;background:transparent;">Keep in Staging (Do Nothing)</button>
+                        </div>
+                      `;
+                      
+                      choiceOverlay.appendChild(choiceBox);
+                      document.body.appendChild(choiceOverlay);
+                      
+                      requestAnimationFrame(() => {
+                        choiceOverlay.style.opacity = '1';
+                        choiceBox.style.transform = 'translateY(0)';
+                      });
+                      
+                      const cleanup = () => {
+                        choiceOverlay.style.opacity = '0';
+                        setTimeout(() => choiceOverlay.remove(), 300);
+                        fetchMlStatus();
+                        resolve();
+                      };
+                      
+                      choiceBox.querySelector('#btn-ab-test').onclick = () => {
+                        startABTestWithModel(versionName);
+                        cleanup();
+                      };
+                      
+                      choiceBox.querySelector('#btn-override').onclick = () => {
+                        overrideModelWithModel(versionName);
+                        cleanup();
+                      };
+                      
+                      choiceBox.querySelector('#btn-cancel').onclick = cleanup;
+                    });
                   }
                 }
               } catch (e) {
-                alert('Error: ' + e.message);
+                appendLog(`FATAL: ${e.message}`, '#ff7b72');
+                await new Promise(r => setTimeout(r, 2000));
               } finally {
-                uploadText.remove();
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 300);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -1620,6 +1712,37 @@
         };
         input.click();
       };
+      
+      const overrideModelWithModel = async modelVersion => {
+        if (!confirm(`Force override current model with "${modelVersion}"?\n\nThis will instantly deploy this model and stop an active A/B test.`)) {
+          fetchMlStatus();
+          return;
+        }
+        try {
+          const token = getAdminToken();
+          const res = await fetch('/api/ml_manage', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'override_model',
+              version_name: modelVersion
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert(data.message);
+            fetchMlStatus();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to override model'));
+          }
+        } catch (e) {
+          alert('Failed to override model: ' + e.message);
+        }
+      };
+      
       const startABTestWithModel = async modelVersion => {
         if (!confirm(`Start A/B test with "${modelVersion}" as Model B?\n\nThis will:\n- Bypass the 200 game requirement\n- Begin testing immediately\n- Reset any existing A/B test`)) {
           fetchMlStatus();

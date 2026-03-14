@@ -558,6 +558,25 @@ class handler(BaseHTTPRequestHandler):
                             'message': f'A/B test started with challenger: {challenger_version}',
                             'note': 'Bypassed 200 game requirement as requested'
                         }
+            
+            elif action == 'override_model':
+                version_name = data.get('version_name')
+                if not version_name:
+                    response = {'success': False, 'error': 'version_name required'}
+                else:
+                    # Verify the model exists
+                    model_doc = db.collection('ml_models').document(version_name).get()
+                    if not model_doc.exists:
+                        response = {'success': False, 'error': f'Model {version_name} not found'}
+                    else:
+                        update_ml_config({
+                            'current_model_version': version_name,
+                            'ab_test_active': False
+                        })
+                        response = {
+                            'success': True,
+                            'message': f'Successfully forcefully overridden current model to {version_name}'
+                        }
                 
             else:
                 response = {'error': f'Unknown action: {action}', 'available_actions': [
