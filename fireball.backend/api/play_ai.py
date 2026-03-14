@@ -6,8 +6,6 @@ import base64
 import time
 import threading
 from collections import defaultdict
-import firebase_admin
-from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
 
 # ============ GAME LOGIC (inlined to avoid import issues) ============
@@ -84,37 +82,28 @@ class FireballQLearning:
             return 'megaball'
 
         # === RULE 1: Anti charge-spam ===
-        # Opponent charging repeatedly → they are building to megaball.
-        # Fireball beats charge, iceball beats charge. Punish immediately.
         if opp_charge_streak >= 2:
             if opp_charges >= 4:
-                # CRITICAL: they megaball next turn if we don't act
                 if 'iceball' in legal_moves:
                     return 'iceball'
                 if 'fireball' in legal_moves:
                     return 'fireball'
-            # They've charged 2+ times in a row — likely charging again
             if 'fireball' in legal_moves:
                 return 'fireball'
             if 'iceball' in legal_moves:
                 return 'iceball'
 
         # === RULE 2: Anti shield-loop ===
-        # Opponent spamming shield → attacks are wasted (shield blocks all
-        # except megaball). Build charges toward megaball instead.
         if opp_shield_streak >= 2:
             if my_charges >= 4:
-                return 'charge'  # one more → megaball next turn
-            # Don't waste ammo attacking into shields
+                return 'charge'
             return 'charge'
 
         # === RULE 3: Break OUR OWN shield loop ===
-        # If we've been shielding too, stop — charge up instead.
         if my_shield_streak >= 2 and opp_shield_streak >= 1:
             return 'charge'
 
         # === RULE 4: Opponent can megaball (5+ charges) ===
-        # Shield is useless vs megaball. Attack to try to end it first.
         if opp_charges >= 5:
             if 'iceball' in legal_moves:
                 return 'iceball'
@@ -123,7 +112,6 @@ class FireballQLearning:
             return 'charge'
 
         # === RULE 5: Opponent has 0 charges — they MUST charge ===
-        # Fireball beats charge. Free hit.
         if opp_charges == 0:
             if 'fireball' in legal_moves:
                 prob = 0.85 if aggressive else 0.6
@@ -131,7 +119,6 @@ class FireballQLearning:
             return 'charge'
 
         # === RULE 6: Opponent just charged last turn (not a streak) ===
-        # Good chance they'll charge again — punish.
         if len(opp_recent) > 0 and opp_recent[-1] == 'charge':
             if 'fireball' in legal_moves:
                 prob = 0.7 if aggressive else 0.45
@@ -140,7 +127,6 @@ class FireballQLearning:
 
         # === STRATEGIC PLAY (mode-dependent) ===
         if aggressive:
-            # Aggressive: attack when we have charges
             if my_charges > opp_charges and my_charges >= 2:
                 if 'iceball' in legal_moves and random.random() < 0.5:
                     return 'iceball'
@@ -155,7 +141,6 @@ class FireballQLearning:
 
             return 'charge'
         else:
-            # Balanced: stay competitive but beatable
             if my_charges <= 1 and opp_charges >= 3:
                 return 'shield' if random.random() < 0.4 else 'charge'
 
@@ -165,7 +150,6 @@ class FireballQLearning:
                 if 'fireball' in legal_moves and random.random() < 0.35:
                     return 'fireball'
 
-            # Weighted random fallback — low shield weight to prevent loops
             weights = {
                 'charge': 0.45,
                 'shield': 0.08,
@@ -232,50 +216,103 @@ class FireballGame:
         return "continue"
 
 
-# ============ FIREBASE INIT ============
+# ============ LOCAL MODEL LOADING (runs once at module import) ============
+# On Vercel, the module is imported once per Lambda container. This code runs
+# during cold start and persists across warm invocations (~60s idle timeout).
+# Loading the 8.59 MB gzip file from the bundled filesystem is ~2-3s on cold
+# start, but subsequent requests reuse the already-loaded _LOCAL_Q_TABLE at
+# zero cost.
 
-if not firebase_admin._apps:
-    try:
-        service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
-        cred = credentials.Certificate(service_account_info)
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        print(f"Firebase Init Error: {e}")
-
-try:
-    db = firestore.client()
-except:
-    db = None
-
-# ============ MODEL LOADING ============
-
-# Default: Load from local file (supports model.pkl or model.pkl.gz)
 def _load_local_model():
+    """Load the model from the filesystem bundled with the Vercel deployment."""
     model = FireballQLearning(epsilon=0)
     base_dir = os.path.join(os.path.dirname(__file__), '..')
-    gz_path = os.path.join(base_dir, 'model.pkl.gz')
-    pkl_path = os.path.join(base_dir, 'model.pkl')
-    try:
-        if os.path.exists(gz_path):
-            with open(gz_path, 'rb') as f:
-                model.load_from_bytes(f.read())
-            return model, True, gz_path
-        if os.path.exists(pkl_path) and model.load_model(pkl_path):
-            return model, True, pkl_path
-    except Exception as e:
-        print(f"Local model load error: {e}")
-    return model, False, pkl_path
+    
+    # Try model.pkl.gz first, then model.pkl
+    # Note: model.pkl is itself gzip-compressed (despite the .pkl extension),
+    # and load_from_bytes handles the gzip magic byte detection automatically.
+    for filename in ('model.pkl.gz', 'model.pkl'):
+        path = os.path.join(base_dir, filename)
+        try:
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    model.load_from_bytes(f.read())
+                if len(model.q_table) > 10:
+                    print(f"[play_ai] Loaded local model from {filename}: {len(model.q_table)} states")
+                    return model, True, path
+                else:
+                    print(f"[play_ai] Model {filename} loaded but only {len(model.q_table)} states — skipping")
+        except Exception as e:
+            print(f"[play_ai] Error loading {filename}: {e}")
+    
+    print("[play_ai] WARNING: No local model found, will fall back to Firebase")
+    return model, False, None
 
 
-ai_player, model_loaded, _LOCAL_MODEL_PATH = _load_local_model()
-_LOCAL_Q_TABLE = ai_player.q_table if model_loaded else None
+# Load once at module level — persists across warm invocations
+ai_player, _model_loaded, _LOCAL_MODEL_PATH = _load_local_model()
+_LOCAL_Q_TABLE = ai_player.q_table if _model_loaded else None
 
-# In-memory model cache (per warm instance)
+# Default to using the local model. Set PREFER_LOCAL_MODEL=false in Vercel
+# env vars ONLY if you want to force Firebase model loading (e.g. A/B testing).
+_PREFER_LOCAL_MODEL = os.environ.get('PREFER_LOCAL_MODEL', 'true').lower() not in ('0', 'false', 'no')
+
+
+# ============ LAZY FIREBASE INIT (only for game logging) ============
+# Firebase Admin SDK is heavy (~2-3s to initialize). Since we load the model
+# from the local filesystem, we only need Firebase for logging game data.
+# Lazy-init means we don't pay for it until the first log write, and even
+# then it only happens once per container lifetime.
+
+_db = None
+_db_init_lock = threading.Lock()
+_firebase_init_done = False
+
+
+def _get_db():
+    """Lazy-initialize Firebase and return a Firestore client."""
+    global _db, _firebase_init_done
+    if _db is not None:
+        return _db
+    
+    with _db_init_lock:
+        # Double-check after acquiring lock
+        if _db is not None:
+            return _db
+        
+        if not _firebase_init_done:
+            _firebase_init_done = True
+            try:
+                if not __import__('firebase_admin')._apps:
+                    import firebase_admin as _fa
+                    from firebase_admin import credentials as _creds
+                    sa_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
+                    if sa_info:
+                        cred = _creds.Certificate(sa_info)
+                        _fa.initialize_app(cred)
+                    else:
+                        print("[play_ai] FIREBASE_SERVICE_ACCOUNT env var not set")
+                        return None
+            except Exception as e:
+                print(f"[play_ai] Firebase Init Error: {e}")
+                return None
+        
+        try:
+            from firebase_admin import firestore as _fs
+            _db = _fs.client()
+        except Exception as e:
+            print(f"[play_ai] Firestore client error: {e}")
+    
+    return _db
+
+
+# ============ MODEL LOADING FROM FIREBASE (fallback only) ============
+# This is only used when PREFER_LOCAL_MODEL is False and we need A/B testing.
+
 _MODEL_CACHE = {}
 _MODEL_CACHE_USED_AT = {}
 _MODEL_CACHE_MAX = max(1, int(os.environ.get('MODEL_CACHE_MAX', '2')))
 _MODEL_CACHE_LOCK = threading.Lock()
-_PREFER_LOCAL_MODEL = os.environ.get('PREFER_LOCAL_MODEL', '').lower() in ('1', 'true', 'yes')
 
 
 def _build_model_from_q_table(q_table):
@@ -297,11 +334,11 @@ def _cache_put(version_name, q_table):
         _MODEL_CACHE[version_name] = q_table
         _MODEL_CACHE_USED_AT[version_name] = time.time()
         if len(_MODEL_CACHE) > _MODEL_CACHE_MAX:
-            # Evict least-recently-used entry
             oldest = min(_MODEL_CACHE_USED_AT, key=_MODEL_CACHE_USED_AT.get)
             if oldest != version_name:
                 _MODEL_CACHE.pop(oldest, None)
                 _MODEL_CACHE_USED_AT.pop(oldest, None)
+
 
 # A/B Testing thresholds
 AB_TEST_GAMES_REQUIRED = 15
@@ -309,6 +346,7 @@ AB_TEST_GAMES_REQUIRED = 15
 
 def get_ml_config():
     """Get ML configuration from Firebase."""
+    db = _get_db()
     if not db:
         return None
     try:
@@ -322,6 +360,7 @@ def get_ml_config():
 
 def update_ml_config(updates):
     """Update ML configuration in Firebase."""
+    db = _get_db()
     if not db:
         return False
     try:
@@ -334,7 +373,8 @@ def update_ml_config(updates):
 
 
 def load_model_from_firebase(version_name):
-    """Load a model from Firebase."""
+    """Load a model from Firebase (fallback only)."""
+    db = _get_db()
     if not db or not version_name:
         return None
     cached_q_table = _cache_get(version_name)
@@ -382,8 +422,6 @@ def load_model_from_firebase(version_name):
         model = FireballQLearning(epsilon=0)
         model.load_from_bytes(model_bytes)
         
-        # Validate that model has sufficient Q-table entries
-        # An empty or near-empty Q-table indicates a broken model
         if len(model.q_table) < 10:
             print(f"Warning: Model {version_name} has only {len(model.q_table)} states, possibly corrupted")
             return None
@@ -399,14 +437,18 @@ def get_model_for_game():
     """
     Get the appropriate model for a game, handling A/B testing.
     Returns (model, model_id, version_name) tuple.
-    model_id is 'A' (current) or 'B' (challenger) for tracking.
-    Falls back to local model.pkl if Firebase models not available.
+    
+    FAST PATH: If the local model is loaded (the common case), return it
+    immediately with zero network calls. This is the key optimization —
+    warm invocations skip Firebase entirely.
     """
+    # ── Fast path: local model (no Firebase, no network) ──
     if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
         return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
+    
+    # ── Slow path: Firebase models (for A/B testing scenarios) ──
     config = get_ml_config()
     
-    # If no config, use local model
     if not config:
         return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
@@ -417,7 +459,6 @@ def get_model_for_game():
             model = load_model_from_firebase(current_version)
             if model:
                 return model, 'A', current_version
-        # Fallback to local
         return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
     # A/B test is active - randomly assign
@@ -430,7 +471,6 @@ def get_model_for_game():
         model = load_model_from_firebase(config.get('challenger_model_version'))
         if model:
             return model, 'B', config.get('challenger_model_version')
-        # Fallback to current if challenger fails
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
             return model, 'A', config.get('current_model_version')
@@ -439,6 +479,7 @@ def get_model_for_game():
 
 def delete_model_from_firebase(version_name):
     """Delete a model from Firebase."""
+    db = _get_db()
     if not db or not version_name:
         return False
     try:
@@ -451,10 +492,8 @@ def delete_model_from_firebase(version_name):
 def record_game_result_and_check_ab(model_id, ai_won, config):
     """
     Record the result of a game for A/B testing and check if test should conclude.
-    Returns updated config status.
     """
     if not config or not config.get('ab_test_active'):
-        # Just increment game count
         update_ml_config({
             'games_since_last_training': (config.get('games_since_last_training', 0) if config else 0) + 1
         })
@@ -475,7 +514,6 @@ def record_game_result_and_check_ab(model_id, ai_won, config):
     
     update_ml_config(updates)
     
-    # Check if A/B test should conclude
     a_games = (config.get('model_a_games', 0) + (1 if model_id == 'A' else 0))
     b_games = (config.get('model_b_games', 0) + (1 if model_id == 'B' else 0))
     
@@ -485,7 +523,6 @@ def record_game_result_and_check_ab(model_id, ai_won, config):
 
 def conclude_ab_test(config, last_model_id, last_ai_won):
     """Conclude A/B test and promote winner."""
-    # Re-fetch config to get latest values
     config = get_ml_config()
     if not config:
         return
@@ -504,7 +541,6 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
     challenger_version = config.get('challenger_model_version')
     
     if b_winrate > a_winrate:
-        # Challenger wins - promote it
         print(f"Challenger wins! Promoting {challenger_version}")
         if current_version and current_version != 'v1_original':
             delete_model_from_firebase(current_version)
@@ -519,7 +555,6 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
             'model_b_wins': 0
         })
     else:
-        # Current model wins
         print(f"Current model wins! Keeping {current_version}")
         if challenger_version:
             delete_model_from_firebase(challenger_version)
@@ -533,6 +568,42 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
             'model_b_wins': 0
         })
 
+
+# ============ NON-BLOCKING GAME LOGGING ============
+
+def _log_game_data_async(turn_data, match_data=None, model_id=None, config=None, ai_won=None):
+    """
+    Fire-and-forget game logging in a background thread.
+    This prevents Firestore writes from blocking the API response.
+    """
+    def _do_log():
+        try:
+            db = _get_db()
+            if not db:
+                return
+            
+            from firebase_admin import firestore as _fs
+            
+            # Log the turn
+            if turn_data:
+                turn_data['timestamp'] = _fs.SERVER_TIMESTAMP
+                db.collection('ai_game_turns').add(turn_data)
+            
+            # Log the match result
+            if match_data:
+                match_data['timestamp'] = _fs.SERVER_TIMESTAMP
+                db.collection('ai_vs_human_matches').add(match_data)
+                
+                # Record for A/B testing
+                if config is not None and ai_won is not None and model_id:
+                    record_game_result_and_check_ab(model_id, ai_won, config)
+        except Exception as e:
+            print(f"[play_ai] Async log error: {e}")
+    
+    threading.Thread(target=_do_log, daemon=True).start()
+
+
+# ============ HTTP HANDLER ============
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -551,7 +622,7 @@ class handler(BaseHTTPRequestHandler):
             player_move = data.get('playerMove')
             user_id = data.get('userId', 'unknown')
 
-            # Get model for this game (handles A/B testing)
+            # Get model for this game (fast path: local model, ~0ms)
             model, model_id, model_version = get_model_for_game()
             
             if not model:
@@ -576,45 +647,47 @@ class handler(BaseHTTPRequestHandler):
 
             result = game.execute_turn(player_move, ai_move)
 
-            # Log game data to Firebase
-            if db:
-                try:
-                    move_history = data.get('moveHistory', []) + [player_move]
-                    ai_history = data.get('oppMoveHistory', []) + [ai_move]
+            # Build log data and fire-and-forget in background thread
+            move_history = data.get('moveHistory', []) + [player_move]
+            ai_history = data.get('oppMoveHistory', []) + [ai_move]
 
-                    db.collection('ai_game_turns').add({
-                        'player_charges_before': data.get('playerCharges', 0),
-                        'ai_charges_before': data.get('aiCharges', 0),
-                        'player_move': player_move,
-                        'ai_move': ai_move,
-                        'result': result,
-                        'turn_number': len(move_history),
-                        'model_id': model_id,
-                        'model_version': model_version,
-                        'user_id': user_id,
-                        'timestamp': firestore.SERVER_TIMESTAMP
-                    })
+            turn_data = {
+                'player_charges_before': data.get('playerCharges', 0),
+                'ai_charges_before': data.get('aiCharges', 0),
+                'player_move': player_move,
+                'ai_move': ai_move,
+                'result': result,
+                'turn_number': len(move_history),
+                'model_id': model_id,
+                'model_version': model_version,
+                'user_id': user_id,
+            }
 
-                    if game.game_over:
-                        ai_won = game.winner == 'player2'
-                        
-                        db.collection('ai_vs_human_matches').add({
-                            'winner': 'ai' if ai_won else 'human',
-                            'turns': len(move_history),
-                            'player_moves': move_history,
-                            'ai_moves': ai_history,
-                            'model_id': model_id,
-                            'model_version': model_version,
-                            'user_id': user_id,
-                            'timestamp': firestore.SERVER_TIMESTAMP
-                        })
-                        
-                        # Record for A/B testing
-                        config = get_ml_config()
-                        record_game_result_and_check_ab(model_id, ai_won, config)
-                        
-                except Exception as log_err:
-                    print(f"Logging error: {log_err}")
+            match_data = None
+            ab_config = None
+            ai_won = None
+            if game.game_over:
+                ai_won = game.winner == 'player2'
+                match_data = {
+                    'winner': 'ai' if ai_won else 'human',
+                    'turns': len(move_history),
+                    'player_moves': move_history,
+                    'ai_moves': ai_history,
+                    'model_id': model_id,
+                    'model_version': model_version,
+                    'user_id': user_id,
+                }
+                # Only fetch config for A/B test tracking — this is deferred
+                ab_config = 'deferred'
+
+            # Log asynchronously — don't block the response
+            def _deferred_log():
+                cfg = None
+                if ab_config == 'deferred':
+                    cfg = get_ml_config()
+                _log_game_data_async(turn_data, match_data, model_id, cfg, ai_won)
+            
+            threading.Thread(target=_deferred_log, daemon=True).start()
 
             response = {
                 "playerCharges": game.player_charges,
@@ -623,7 +696,7 @@ class handler(BaseHTTPRequestHandler):
                 "result": result,
                 "gameOver": game.game_over,
                 "winner": game.winner,
-                "modelId": model_id  # Optional: for debugging which model was used
+                "modelId": model_id
             }
 
             self.send_response(200)
