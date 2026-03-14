@@ -190,8 +190,15 @@ class FireballQLearning:
 
     def load_from_bytes(self, data):
         """Load model from bytes (for Firebase models)."""
-        loaded = pickle.loads(data)
-        self.q_table = defaultdict(lambda: defaultdict(float), loaded)
+        import gzip
+        try:
+            if data.startswith(b'\x1f\x8b'):
+                data = gzip.decompress(data)
+            loaded = pickle.loads(data)
+            self.q_table = defaultdict(lambda: defaultdict(float), loaded)
+        except Exception as e:
+            print(f"Error loading model from bytes: {e}")
+            self.q_table = defaultdict(lambda: defaultdict(float))
 
 
 class FireballGame:
@@ -284,7 +291,19 @@ def load_model_from_firebase(version_name):
         if not doc.exists:
             return None
         data = doc.to_dict()
-        model_b64 = data.get('model_data')
+        
+        if data.get('chunked'):
+            total_chunks = data.get('total_chunks', 0)
+            model_b64 = ""
+            for i in range(total_chunks):
+                chunk_doc = db.collection('ml_models').document(f"{version_name}_chunk_{i}").get()
+                if not chunk_doc.exists:
+                    print(f"Missing chunk {i} for {version_name}")
+                    return None
+                model_b64 += chunk_doc.to_dict().get('data', '')
+        else:
+            model_b64 = data.get('model_data')
+            
         if not model_b64:
             return None
         model_bytes = base64.b64decode(model_b64)

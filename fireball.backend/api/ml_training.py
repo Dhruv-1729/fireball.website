@@ -118,8 +118,15 @@ class FireballQLearning:
 
     def load_from_bytes(self, data):
         """Load model from bytes."""
-        loaded = pickle.loads(data)
-        self.q_table = defaultdict(lambda: defaultdict(float), loaded)
+        import gzip
+        try:
+            if data.startswith(b'\x1f\x8b'):
+                data = gzip.decompress(data)
+            loaded = pickle.loads(data)
+            self.q_table = defaultdict(lambda: defaultdict(float), loaded)
+        except Exception as e:
+            print(f"Error loading model from bytes: {e}")
+            self.q_table = defaultdict(lambda: defaultdict(float))
 
 
 class FireballGame:
@@ -391,7 +398,7 @@ def update_ml_config(updates):
 
 
 def save_model_to_firebase(model, version_name):
-    """Save a trained model to Firebase as base64-encoded pickle."""
+    """Save a trained model to Firebase as base64-encoded pickle, applying chunking."""
     if not db:
         return False
     
@@ -399,14 +406,25 @@ def save_model_to_firebase(model, version_name):
         model_bytes = model.save_to_bytes()
         model_b64 = base64.b64encode(model_bytes).decode('utf-8')
         
+        CHUNK_SIZE = 700 * 1024
+        total_chunks = (len(model_b64) + CHUNK_SIZE - 1) // CHUNK_SIZE
+        
         db.collection('ml_models').document(version_name).set({
-            'model_data': model_b64,
+            'chunked': True,
+            'total_chunks': total_chunks,
             'created_at': firestore.SERVER_TIMESTAMP,
             'version': version_name,
             'q_table_size': len(model.q_table)
         })
         
-        print(f"Model '{version_name}' saved to Firebase")
+        for i in range(total_chunks):
+            chunk_data = model_b64[i*CHUNK_SIZE : (i+1)*CHUNK_SIZE]
+            db.collection('ml_models').document(f"{version_name}_chunk_{i}").set({
+                'data': chunk_data,
+                'chunk_index': i
+            })
+            
+        print(f"Model '{version_name}' saved to Firebase in {total_chunks} chunks.")
         return True
     except Exception as e:
         print(f"Error saving model: {e}")
@@ -415,7 +433,7 @@ def save_model_to_firebase(model, version_name):
 
 def load_model_from_firebase(version_name):
     """Load a model from Firebase."""
-    if not db:
+    if not db or not version_name:
         return None
     
     try:
@@ -424,7 +442,19 @@ def load_model_from_firebase(version_name):
             return None
         
         data = doc.to_dict()
-        model_b64 = data.get('model_data')
+        
+        if data.get('chunked'):
+            total_chunks = data.get('total_chunks', 0)
+            model_b64 = ""
+            for i in range(total_chunks):
+                chunk_doc = db.collection('ml_models').document(f"{version_name}_chunk_{i}").get()
+                if not chunk_doc.exists:
+                    print(f"Missing chunk {i} for {version_name}")
+                    return None
+                model_b64 += chunk_doc.to_dict().get('data', '')
+        else:
+            model_b64 = data.get('model_data')
+            
         if not model_b64:
             return None
         

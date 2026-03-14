@@ -83,16 +83,30 @@ def update_ml_config(updates):
 
 
 def save_model_to_firebase(model_data, version_name):
-    """Save model bytes to Firebase as base64."""
+    """Save model bytes to Firebase as base64, chunking if necessary to bypass 1MB limit."""
     if not db:
         return False
     try:
         model_b64 = base64.b64encode(model_data).decode('utf-8')
+        CHUNK_SIZE = 700 * 1024  # 700 KB per chunk (in base64 characters)
+        total_chunks = (len(model_b64) + CHUNK_SIZE - 1) // CHUNK_SIZE
+        
+        # Save metadata document
         db.collection('ml_models').document(version_name).set({
-            'model_data': model_b64,
+            'chunked': True,
+            'total_chunks': total_chunks,
             'created_at': firestore.SERVER_TIMESTAMP,
             'version': version_name
         })
+        
+        # Save individual chunks
+        for i in range(total_chunks):
+            chunk_data = model_b64[i*CHUNK_SIZE : (i+1)*CHUNK_SIZE]
+            db.collection('ml_models').document(f"{version_name}_chunk_{i}").set({
+                'data': chunk_data,
+                'chunk_index': i
+            })
+            
         return True
     except Exception as e:
         print(f"Error saving model: {e}")
