@@ -3,6 +3,8 @@ import os
 import random
 import pickle
 import base64
+import time
+import threading
 from collections import defaultdict
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -247,10 +249,59 @@ except:
 
 # ============ MODEL LOADING ============
 
-# Default: Load from local file
-ai_player = FireballQLearning(epsilon=0)
-model_path = os.path.join(os.path.dirname(__file__), '..', 'model.pkl')
-model_loaded = ai_player.load_model(model_path)
+# Default: Load from local file (supports model.pkl or model.pkl.gz)
+def _load_local_model():
+    model = FireballQLearning(epsilon=0)
+    base_dir = os.path.join(os.path.dirname(__file__), '..')
+    gz_path = os.path.join(base_dir, 'model.pkl.gz')
+    pkl_path = os.path.join(base_dir, 'model.pkl')
+    try:
+        if os.path.exists(gz_path):
+            with open(gz_path, 'rb') as f:
+                model.load_from_bytes(f.read())
+            return model, True, gz_path
+        if os.path.exists(pkl_path) and model.load_model(pkl_path):
+            return model, True, pkl_path
+    except Exception as e:
+        print(f"Local model load error: {e}")
+    return model, False, pkl_path
+
+
+ai_player, model_loaded, _LOCAL_MODEL_PATH = _load_local_model()
+_LOCAL_Q_TABLE = ai_player.q_table if model_loaded else None
+
+# In-memory model cache (per warm instance)
+_MODEL_CACHE = {}
+_MODEL_CACHE_USED_AT = {}
+_MODEL_CACHE_MAX = max(1, int(os.environ.get('MODEL_CACHE_MAX', '2')))
+_MODEL_CACHE_LOCK = threading.Lock()
+_PREFER_LOCAL_MODEL = os.environ.get('PREFER_LOCAL_MODEL', '').lower() in ('1', 'true', 'yes')
+
+
+def _build_model_from_q_table(q_table):
+    model = FireballQLearning(epsilon=0)
+    model.q_table = q_table
+    return model
+
+
+def _cache_get(version_name):
+    with _MODEL_CACHE_LOCK:
+        q_table = _MODEL_CACHE.get(version_name)
+        if q_table is not None:
+            _MODEL_CACHE_USED_AT[version_name] = time.time()
+        return q_table
+
+
+def _cache_put(version_name, q_table):
+    with _MODEL_CACHE_LOCK:
+        _MODEL_CACHE[version_name] = q_table
+        _MODEL_CACHE_USED_AT[version_name] = time.time()
+        if len(_MODEL_CACHE) > _MODEL_CACHE_MAX:
+            # Evict least-recently-used entry
+            oldest = min(_MODEL_CACHE_USED_AT, key=_MODEL_CACHE_USED_AT.get)
+            if oldest != version_name:
+                _MODEL_CACHE.pop(oldest, None)
+                _MODEL_CACHE_USED_AT.pop(oldest, None)
 
 # A/B Testing thresholds
 AB_TEST_GAMES_REQUIRED = 15
@@ -286,6 +337,9 @@ def load_model_from_firebase(version_name):
     """Load a model from Firebase."""
     if not db or not version_name:
         return None
+    cached_q_table = _cache_get(version_name)
+    if cached_q_table is not None:
+        return _build_model_from_q_table(cached_q_table)
     try:
         doc = db.collection('ml_models').document(version_name).get()
         if not doc.exists:
@@ -294,13 +348,31 @@ def load_model_from_firebase(version_name):
         
         if data.get('chunked'):
             total_chunks = data.get('total_chunks', 0)
-            model_b64 = ""
-            for i in range(total_chunks):
-                chunk_doc = db.collection('ml_models').document(f"{version_name}_chunk_{i}").get()
+            chunk_refs = [
+                db.collection('ml_models').document(f"{version_name}_chunk_{i}")
+                for i in range(total_chunks)
+            ]
+            chunk_docs = list(db.get_all(chunk_refs))
+            chunks = [""] * total_chunks
+            for chunk_doc in chunk_docs:
                 if not chunk_doc.exists:
-                    print(f"Missing chunk {i} for {version_name}")
+                    print(f"Missing chunk doc for {version_name}")
                     return None
-                model_b64 += chunk_doc.to_dict().get('data', '')
+                payload = chunk_doc.to_dict() or {}
+                idx = payload.get('chunk_index')
+                if idx is None:
+                    try:
+                        idx = int(chunk_doc.id.rsplit('_', 1)[-1])
+                    except Exception:
+                        idx = None
+                if idx is None or idx < 0 or idx >= total_chunks:
+                    print(f"Invalid chunk index for {version_name}: {idx}")
+                    return None
+                chunks[idx] = payload.get('data', '')
+            if any(not c for c in chunks):
+                print(f"Missing chunk data for {version_name}")
+                return None
+            model_b64 = "".join(chunks)
         else:
             model_b64 = data.get('model_data')
             
@@ -316,7 +388,8 @@ def load_model_from_firebase(version_name):
             print(f"Warning: Model {version_name} has only {len(model.q_table)} states, possibly corrupted")
             return None
         
-        return model
+        _cache_put(version_name, model.q_table)
+        return _build_model_from_q_table(model.q_table)
     except Exception as e:
         print(f"Error loading model from Firebase: {e}")
         return None
@@ -329,11 +402,13 @@ def get_model_for_game():
     model_id is 'A' (current) or 'B' (challenger) for tracking.
     Falls back to local model.pkl if Firebase models not available.
     """
+    if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
+        return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
     config = get_ml_config()
     
     # If no config, use local model
     if not config:
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
     # If A/B test is not active, use current model
     if not config.get('ab_test_active') or not config.get('challenger_model_version'):
@@ -343,14 +418,14 @@ def get_model_for_game():
             if model:
                 return model, 'A', current_version
         # Fallback to local
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
     # A/B test is active - randomly assign
     if random.random() < 0.5:
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
             return model, 'A', config.get('current_model_version')
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     else:
         model = load_model_from_firebase(config.get('challenger_model_version'))
         if model:
@@ -359,7 +434,7 @@ def get_model_for_game():
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
             return model, 'A', config.get('current_model_version')
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
 
 
 def delete_model_from_firebase(version_name):
