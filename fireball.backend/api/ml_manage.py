@@ -502,29 +502,34 @@ class handler(BaseHTTPRequestHandler):
                     })
                 response = {'success': True, 'models': models}
             
-            elif action == 'upload_model':
-                # Upload a new model from base64-encoded pickle data
-                model_b64 = data.get('model_data')
+            elif action == 'upload_model_chunk':
                 version_name = data.get('version_name')
+                chunk_index = data.get('chunk_index')
+                total_chunks = data.get('total_chunks')
+                chunk_data = data.get('chunk_data')
                 
-                if not model_b64 or not version_name:
-                    response = {'success': False, 'error': 'model_data and version_name required'}
+                if not version_name or chunk_index is None or not chunk_data or not total_chunks:
+                    response = {'success': False, 'error': 'Missing chunk data'}
                 else:
                     try:
-                        # Validate it's valid base64/pickle
-                        model_bytes = base64.b64decode(model_b64)
-                        pickle.loads(model_bytes)  # Validates pickle format
-                        
-                        # Save to Firebase
-                        db.collection('ml_models').document(version_name).set({
-                            'model_data': model_b64,
-                            'created_at': firestore.SERVER_TIMESTAMP,
-                            'version': version_name,
-                            'q_table_size': len(pickle.loads(model_bytes))
+                        db.collection('ml_models').document(f"{version_name}_chunk_{chunk_index}").set({
+                            'data': chunk_data,
+                            'chunk_index': chunk_index
                         })
-                        response = {'success': True, 'message': f'Model {version_name} uploaded successfully'}
+                        
+                        # Once the last chunk arrives, set the main document
+                        if chunk_index == total_chunks - 1:
+                            db.collection('ml_models').document(version_name).set({
+                                'chunked': True,
+                                'total_chunks': total_chunks,
+                                'created_at': firestore.SERVER_TIMESTAMP,
+                                'version': version_name
+                            })
+                            response = {'success': True, 'message': f'Model {version_name} fully uploaded!'}
+                        else:
+                            response = {'success': True, 'message': f'Chunk {chunk_index+1}/{total_chunks} OK'}
                     except Exception as e:
-                        response = {'success': False, 'error': f'Invalid model data: {str(e)}'}
+                        response = {'success': False, 'error': str(e)}
             
             elif action == 'start_ab_test':
                 # Manually start A/B test with a specified challenger model

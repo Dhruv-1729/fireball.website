@@ -1568,27 +1568,49 @@
               }
               const modelB64 = btoa(binary);
               const token = getAdminToken();
-              const res = await fetch('/api/ml_manage', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                  action: 'upload_model',
-                  model_data: modelB64,
-                  version_name: versionName
-                })
-              });
-              const data = await res.json();
-              if (data.success) {
-                if (confirm(data.message + '\n\nStart A/B test with this model now?')) {
-                  startABTestWithModel(versionName);
-                } else {
-                  fetchMlStatus();
+              
+              const CHUNK_SIZE = 700 * 1024;
+              const totalChunks = Math.ceil(modelB64.length / CHUNK_SIZE);
+              
+              const uploadText = document.createElement('div');
+              uploadText.style.cssText = 'position:fixed;top:10px;right:10px;background:#333;color:white;padding:10px;z-index:9999;';
+              document.body.appendChild(uploadText);
+              
+              try {
+                for (let i = 0; i < totalChunks; i++) {
+                  uploadText.innerHTML = `Uploading chunk ${i+1}/${totalChunks}...`;
+                  const chunkStr = modelB64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                  const res = await fetch('/api/ml_manage', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                      action: 'upload_model_chunk',
+                      version_name: versionName,
+                      chunk_index: i,
+                      total_chunks: totalChunks,
+                      chunk_data: chunkStr
+                    })
+                  });
+                  const data = await res.json();
+                  if (!data.success) {
+                    throw new Error(data.error || 'Upload failed at chunk ' + i);
+                  }
+                  
+                  if (i === totalChunks - 1) {
+                    if (confirm(data.message + '\n\nStart A/B test with this model now?')) {
+                      startABTestWithModel(versionName);
+                    } else {
+                      fetchMlStatus();
+                    }
+                  }
                 }
-              } else {
-                alert('Error: ' + (data.error || 'Upload failed'));
+              } catch (e) {
+                alert('Error: ' + e.message);
+              } finally {
+                uploadText.remove();
               }
             };
             reader.readAsArrayBuffer(file);
@@ -1883,21 +1905,7 @@
           display: 'flex',
           justifyContent: 'space-between'
         }
-      }, /*#__PURE__*/React.createElement("span", null, "Training Enabled:"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          color: mlStatus.master_switch ? 'var(--color-green)' : 'var(--color-text-3)'
-        }
-      }, mlStatus.master_switch ? 'Yes' : 'No (disabled in code)')), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between'
-        }
       }, /*#__PURE__*/React.createElement("span", null, "Current Model:"), /*#__PURE__*/React.createElement("span", null, mlStatus.config?.current_model || 'None (using local model.pkl)')), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between'
-        }
-      }, /*#__PURE__*/React.createElement("span", null, "Games Since Last Training:"), /*#__PURE__*/React.createElement("span", null, mlStatus.config?.games_since_last_training || 0, " / ", mlStatus.config?.games_threshold || 200)), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           justifyContent: 'space-between'
