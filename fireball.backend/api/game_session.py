@@ -59,8 +59,30 @@ class FireballQLearning:
             return random.choice(legal_moves)
         
         if state in self.q_table:
-            q_vals = {m: self.q_table[state][m] + random.uniform(-0.01, 0.01) for m in legal_moves}
-            return max(q_vals, key=q_vals.get)
+            # SOFTMAX (Boltzmann) Action Selection to fix deterministic exploitation
+            # The Q-value gaps are typically 3-12. With T=3.0, the best move is highly
+            # preferred (e.g. 75-95% probability), but there's a chance to pick the
+            # 2nd best move to avoid playing exactly the same way every time.
+            import math
+            temperature = 3.0
+            
+            q_vals = {m: self.q_table[state][m] for m in legal_moves}
+            max_q = max(q_vals.values())
+            
+            # Use math.exp with (q - max_q) to prevent overflow
+            exp_vals = {m: math.exp((q - max_q) / temperature) for m, q in q_vals.items()}
+            total_exp = sum(exp_vals.values())
+            
+            probs = {m: v / total_exp for m, v in exp_vals.items()}
+            
+            # Weighted random selection
+            r = random.random()
+            cumulative = 0.0
+            for move, prob in probs.items():
+                cumulative += prob
+                if r <= cumulative:
+                    return move
+            return legal_moves[-1]
         
         return self._heuristic_action(state, legal_moves)
 
