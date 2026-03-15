@@ -1955,7 +1955,10 @@
       }, "ML Status"), /*#__PURE__*/React.createElement("button", {
         className: `btn ${activeTab === 'settings' ? 'btn-primary' : 'btn-secondary'}`,
         onClick: () => setActiveTab('settings')
-      }, "Settings")), activeTab === 'settings' && /*#__PURE__*/React.createElement("div", {
+      }, "Settings"), /*#__PURE__*/React.createElement("button", {
+        className: `btn ${activeTab === 'players-online' ? 'btn-primary' : 'btn-secondary'}`,
+        onClick: () => { setActiveTab('players-online'); fetchStats(); }
+      }, "Players Online (", stats && stats.onlinePlayers ? stats.onlinePlayers.length : 0, ")")), activeTab === 'settings' && /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'grid',
           gap: '1.5rem'
@@ -2442,7 +2445,156 @@
           textAlign: 'center',
           color: 'var(--color-text-2)'
         }
-      }, "No games yet")))))) : /*#__PURE__*/React.createElement("p", {
+      }, "No games yet"))))), activeTab === 'players-online' && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'grid',
+          gap: '1.5rem'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "home-card-static",
+        style: {
+          padding: '1.5rem'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1.25rem'
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
+        style: {
+          color: 'var(--color-accent)',
+          margin: '0 0 0.25rem'
+        }
+      }, "Live Players Online"), /*#__PURE__*/React.createElement("p", {
+        style: {
+          color: 'var(--color-text-3)',
+          fontSize: '0.8rem',
+          margin: 0
+        }
+      }, "Players active in the last 30 seconds")), /*#__PURE__*/React.createElement("button", {
+        className: "btn btn-secondary",
+        onClick: fetchStats,
+        disabled: loading,
+        style: {
+          padding: '0.4rem 0.9rem',
+          fontSize: '0.8rem'
+        }
+      }, loading ? "Refreshing..." : "Refresh")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: 'var(--color-surface-2)',
+          borderRadius: '6px',
+          overflow: 'hidden'
+        }
+      }, /*#__PURE__*/React.createElement("table", {
+        style: {
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '0.875rem'
+        }
+      }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+        style: {
+          background: 'rgba(255,255,255,0.04)',
+          textAlign: 'left'
+        }
+      }, /*#__PURE__*/React.createElement("th", {
+        style: {
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          color: 'var(--color-text-3)',
+          fontWeight: 500,
+          width: '40px'
+        }
+      }, "#"), /*#__PURE__*/React.createElement("th", {
+        style: {
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          color: 'var(--color-text-3)',
+          fontWeight: 500
+        }
+      }, "Player ID"), /*#__PURE__*/React.createElement("th", {
+        style: {
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          color: 'var(--color-text-3)',
+          fontWeight: 500
+        }
+      }, "IP Address"), /*#__PURE__*/React.createElement("th", {
+        style: {
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          color: 'var(--color-text-3)',
+          fontWeight: 500
+        }
+      }, "Location"), /*#__PURE__*/React.createElement("th", {
+        style: {
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          color: 'var(--color-text-3)',
+          fontWeight: 500
+        }
+      }, "Last Seen"))), /*#__PURE__*/React.createElement("tbody", null, stats && stats.onlinePlayers && stats.onlinePlayers.map((p, i) => /*#__PURE__*/React.createElement("tr", {
+        key: i,
+        style: {
+          borderBottom: '1px solid var(--color-border-subtle)'
+        }
+      }, /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.75rem 1rem',
+          color: 'var(--color-text-3)',
+          fontSize: '0.8rem'
+        }
+      }, i + 1), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.75rem 1rem',
+          fontFamily: 'monospace',
+          fontSize: '0.78rem',
+          color: 'var(--color-text-2)',
+          maxWidth: '180px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }
+      }, p.playerId), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.75rem 1rem'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          background: 'rgba(139,148,158,0.12)',
+          padding: '3px 8px',
+          borderRadius: '4px',
+          color: 'var(--color-text-1)'
+        }
+      }, p.ip || 'N/A')), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.75rem 1rem',
+          color: 'var(--color-text-2)',
+          fontSize: '0.85rem'
+        }
+      }, p.location && p.location !== 'Unknown' ? p.location : /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--color-text-3)',
+          fontStyle: 'italic'
+        }
+      }, "Unknown")), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.75rem 1rem',
+          color: 'var(--color-text-3)',
+          fontSize: '0.8rem',
+          fontFamily: 'monospace'
+        }
+      }, p.lastSeen || 'N/A'))), (!stats || !stats.onlinePlayers || stats.onlinePlayers.length === 0) && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+        colSpan: "5",
+        style: {
+          padding: '2.5rem',
+          textAlign: 'center',
+          color: 'var(--color-text-3)'
+        }
+      }, "No players currently online"))))))))  : /*#__PURE__*/React.createElement("p", {
         style: {
           textAlign: 'center',
           color: 'var(--color-text-2)'

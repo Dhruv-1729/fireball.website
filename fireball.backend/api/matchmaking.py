@@ -102,10 +102,19 @@ class handler(BaseHTTPRequestHandler):
         if not player_id:
             return {'error': 'No playerId'}
 
-        db.collection('online_players').document(player_id).set({
+        # Capture real client IP from Vercel's proxy headers
+        ip = self.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        if not ip:
+            ip = self.headers.get('X-Real-IP', '').strip()
+
+        doc_data = {
             'lastSeen': firestore.SERVER_TIMESTAMP,
-            'playerId': player_id
-        })
+            'playerId': player_id,
+        }
+        if ip:
+            doc_data['ip_address'] = ip
+
+        db.collection('online_players').document(player_id).set(doc_data)
         return {'status': 'ok'}
 
     def get_online_count(self):

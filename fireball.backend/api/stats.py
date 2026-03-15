@@ -286,6 +286,65 @@ class handler(BaseHTTPRequestHandler):
                     print(f"CRITICAL: Online count fallback failed: {online_fallback_err}")
                     total_online_count = "ERROR"
 
+            # Get online players with IP and geolocation
+            online_players_data = []
+            try:
+                import urllib.request
+                cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=30)
+                players_ref = db.collection('online_players').where('lastSeen', '>=', cutoff_dt).stream()
+
+                raw_players = []
+                for doc in players_ref:
+                    p = doc.to_dict()
+                    last_seen = p.get('lastSeen')
+                    ts_str = ''
+                    if last_seen:
+                        try:
+                            pst_time = last_seen.astimezone(PST) if hasattr(last_seen, 'astimezone') else last_seen.replace(tzinfo=timezone.utc).astimezone(PST)
+                            ts_str = pst_time.strftime('%H:%M:%S PST')
+                        except Exception:
+                            ts_str = str(last_seen)
+                    raw_players.append({
+                        'playerId': p.get('playerId', 'unknown'),
+                        'ip': p.get('ip_address', ''),
+                        'lastSeen': ts_str,
+                    })
+
+                # Batch geolocate unique IPs via ip-api.com (free, no key needed)
+                private_prefixes = ('127.', '10.', '192.168.', '172.', '::1', '')
+                unique_ips = list({p['ip'] for p in raw_players if p['ip'] and not any(p['ip'].startswith(x) for x in private_prefixes)})
+                geo_map = {}
+                if unique_ips:
+                    try:
+                        payload = json.dumps([
+                            {'query': ip, 'fields': 'status,country,regionName,city,query'}
+                            for ip in unique_ips[:100]
+                        ]).encode()
+                        req = urllib.request.Request(
+                            'http://ip-api.com/batch?fields=status,country,regionName,city,query',
+                            data=payload,
+                            headers={'Content-Type': 'application/json'},
+                            method='POST'
+                        )
+                        with urllib.request.urlopen(req, timeout=4) as resp:
+                            geo_results = json.loads(resp.read().decode())
+                        for r in geo_results:
+                            if r.get('status') == 'success':
+                                parts = [r.get('city', ''), r.get('regionName', ''), r.get('country', '')]
+                                geo_map[r['query']] = ', '.join(x for x in parts if x)
+                    except Exception as geo_err:
+                        print(f"Geolocation error: {geo_err}")
+
+                for p in raw_players:
+                    online_players_data.append({
+                        'playerId': p['playerId'],
+                        'ip': p['ip'] or 'N/A',
+                        'location': geo_map.get(p['ip'], 'Unknown') if p['ip'] else 'Unknown',
+                        'lastSeen': p['lastSeen'],
+                    })
+            except Exception as op_err:
+                print(f"Online players data error: {op_err}")
+
             stats = {
                 "uniqueVisitors": unique_visitor_count,
                 "aiWinRate": round(win_rate, 2) if isinstance(win_rate, (int, float)) else win_rate,
@@ -293,7 +352,8 @@ class handler(BaseHTTPRequestHandler):
                 "avgMatchLength": round(avg_length, 2),
                 "aiGamesList": ai_games,
                 "onlineGamesList": online_games,
-                "totalOnlineGames": total_online_count
+                "totalOnlineGames": total_online_count,
+                "onlinePlayers": online_players_data,
             }
 
             self.send_response(200)
