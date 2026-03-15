@@ -118,7 +118,7 @@ class handler(BaseHTTPRequestHandler):
         return {'status': 'ok'}
 
     def get_online_count(self):
-        cutoff = time.time() - 30
+        cutoff = time.time() - 10
         
         # Firestore timestamp comparison
         from datetime import datetime, timezone
@@ -139,7 +139,7 @@ class handler(BaseHTTPRequestHandler):
                 if last_seen:
                     try:
                         ts = last_seen.timestamp()
-                        if now - ts < 60:
+                        if now - ts < 15:
                             count += 1
                     except:
                         pass
