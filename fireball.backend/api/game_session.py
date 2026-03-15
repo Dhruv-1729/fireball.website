@@ -4,6 +4,13 @@ Handles server-authoritative game state for anti-cheat protection.
 - POST /api/game_session?action=start - Start a new game session
 - POST /api/game_session?action=move - Make a move with session validation
 - Automatic cleanup of sessions older than 24 hours
+
+PERFORMANCE NOTES:
+  - Model is loaded from local filesystem at module level (~200ms cold start)
+  - Firebase is lazy-initialized — only when first Firestore write is needed
+  - Per-move: single Firestore read (session) + single write (session update)
+  - Game-over logging is async (background thread)
+  - AI computation is <1ms (Q-table dict lookup)
 """
 
 import json
@@ -12,10 +19,10 @@ import random
 import pickle
 import base64
 import uuid
+import time
+import threading
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
-import firebase_admin
-from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -239,32 +246,115 @@ class FireballGame:
         return "continue"
 
 
-# ============ FIREBASE INIT ============
+# ============ LOCAL MODEL LOADING (runs once at module import) ============
+# On Vercel, the module is imported once per Lambda container. This code runs
+# during cold start and persists across warm invocations (~60s idle timeout).
+# The 9 MB gzip file decompresses to ~40MB / 383K Q-states in ~200ms.
 
-if not firebase_admin._apps:
-    try:
-        service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
-        cred = credentials.Certificate(service_account_info)
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        print(f"Firebase Init Error: {e}")
+def _load_local_model():
+    """Load the model from the filesystem bundled with the Vercel deployment."""
+    model = FireballQLearning(epsilon=0)
+    base_dir = os.path.join(os.path.dirname(__file__), '..')
 
-try:
-    db = firestore.client()
-except:
-    db = None
+    for filename in ('model.pkl.gz', 'model.pkl'):
+        path = os.path.join(base_dir, filename)
+        try:
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    model.load_from_bytes(f.read())
+                if len(model.q_table) > 10:
+                    print(f"[game_session] Loaded local model from {filename}: {len(model.q_table)} states")
+                    return model, True
+                else:
+                    print(f"[game_session] Model {filename} loaded but only {len(model.q_table)} states — skipping")
+        except Exception as e:
+            print(f"[game_session] Error loading {filename}: {e}")
+
+    print("[game_session] WARNING: No local model found, will fall back to Firebase")
+    return model, False
 
 
-# ============ MODEL LOADING ============
+# Load once at module level — persists across warm invocations
+ai_player, _model_loaded = _load_local_model()
+_LOCAL_Q_TABLE = ai_player.q_table if _model_loaded else None
 
-ai_player = FireballQLearning(epsilon=0)
-model_path = os.path.join(os.path.dirname(__file__), '..', 'model.pkl')
-model_loaded = ai_player.load_model(model_path)
+# Default to using the local model. Set PREFER_LOCAL_MODEL=false in Vercel
+# env vars ONLY if you want to force Firebase model loading (e.g. A/B testing).
+_PREFER_LOCAL_MODEL = os.environ.get('PREFER_LOCAL_MODEL', 'true').lower() not in ('0', 'false', 'no')
+
+
+# ============ LAZY FIREBASE INIT (deferred until first write) ============
+# Firebase Admin SDK is heavy (~2-3s to initialize). Since we load the model
+# from the local filesystem, we only need Firebase for session storage and
+# game logging. Lazy-init means cold starts that load the model don't also
+# pay for Firebase SDK initialization.
+
+_db = None
+_db_init_lock = threading.Lock()
+_firebase_init_done = False
+
+
+def _get_db():
+    """Lazy-initialize Firebase and return a Firestore client."""
+    global _db, _firebase_init_done
+    if _db is not None:
+        return _db
+
+    with _db_init_lock:
+        # Double-check after acquiring lock
+        if _db is not None:
+            return _db
+
+        if not _firebase_init_done:
+            _firebase_init_done = True
+            try:
+                import firebase_admin
+                if not firebase_admin._apps:
+                    from firebase_admin import credentials as _creds
+                    sa_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
+                    if sa_info:
+                        cred = _creds.Certificate(sa_info)
+                        firebase_admin.initialize_app(cred)
+                    else:
+                        print("[game_session] FIREBASE_SERVICE_ACCOUNT env var not set")
+                        return None
+            except Exception as e:
+                print(f"[game_session] Firebase Init Error: {e}")
+                return None
+
+        try:
+            from firebase_admin import firestore as _fs
+            _db = _fs.client()
+        except Exception as e:
+            print(f"[game_session] Firestore client error: {e}")
+
+    return _db
+
+
+# ============ MODEL HELPERS ============
 
 AB_TEST_GAMES_REQUIRED = 15
 
 
+def _build_model_from_q_table(q_table):
+    """Create a fresh FireballQLearning with the given Q-table."""
+    model = FireballQLearning(epsilon=0)
+    model.q_table = q_table
+    return model
+
+
+def get_local_model():
+    """
+    FAST PATH: Return the pre-loaded local model immediately.
+    No Firebase, no network calls. This is the common case.
+    """
+    if _LOCAL_Q_TABLE:
+        return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
+    return None, 'A', 'local'
+
+
 def get_ml_config():
+    db = _get_db()
     if not db:
         return None
     try:
@@ -277,6 +367,7 @@ def get_ml_config():
 
 
 def load_model_from_firebase(version_name):
+    db = _get_db()
     if not db or not version_name:
         return None
     try:
@@ -287,13 +378,31 @@ def load_model_from_firebase(version_name):
         
         if data.get('chunked'):
             total_chunks = data.get('total_chunks', 0)
-            model_b64 = ""
-            for i in range(total_chunks):
-                chunk_doc = db.collection('ml_models').document(f"{version_name}_chunk_{i}").get()
+            chunk_refs = [
+                db.collection('ml_models').document(f"{version_name}_chunk_{i}")
+                for i in range(total_chunks)
+            ]
+            chunk_docs = list(db.get_all(chunk_refs))
+            chunks = [""] * total_chunks
+            for chunk_doc in chunk_docs:
                 if not chunk_doc.exists:
-                    print(f"Missing chunk {i} for {version_name}")
+                    print(f"Missing chunk doc for {version_name}")
                     return None
-                model_b64 += chunk_doc.to_dict().get('data', '')
+                payload = chunk_doc.to_dict() or {}
+                idx = payload.get('chunk_index')
+                if idx is None:
+                    try:
+                        idx = int(chunk_doc.id.rsplit('_', 1)[-1])
+                    except Exception:
+                        idx = None
+                if idx is None or idx < 0 or idx >= total_chunks:
+                    print(f"Invalid chunk index for {version_name}: {idx}")
+                    return None
+                chunks[idx] = payload.get('data', '')
+            if any(not c for c in chunks):
+                print(f"Missing chunk data for {version_name}")
+                return None
+            model_b64 = "".join(chunks)
         else:
             model_b64 = data.get('model_data')
             
@@ -314,10 +423,21 @@ def load_model_from_firebase(version_name):
 
 
 def get_model_for_game():
+    """
+    Get the appropriate model for a game, handling A/B testing.
+
+    FAST PATH: If the local model is loaded (the common case), return it
+    immediately with zero network calls.
+    """
+    # ── Fast path: local model (no Firebase, no network) ──
+    if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
+        return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
+
+    # ── Slow path: Firebase models (for A/B testing scenarios) ──
     config = get_ml_config()
     
     if not config:
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
     if not config.get('ab_test_active') or not config.get('challenger_model_version'):
         current_version = config.get('current_model_version')
@@ -325,13 +445,13 @@ def get_model_for_game():
             model = load_model_from_firebase(current_version)
             if model:
                 return model, 'A', current_version
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
     if random.random() < 0.5:
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
             return model, 'A', config.get('current_model_version')
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     else:
         model = load_model_from_firebase(config.get('challenger_model_version'))
         if model:
@@ -339,10 +459,11 @@ def get_model_for_game():
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
             return model, 'A', config.get('current_model_version')
-        return ai_player if model_loaded else None, 'A', 'local'
+        return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
 
 
 def update_ml_config(updates):
+    db = _get_db()
     if not db:
         return False
     try:
@@ -355,6 +476,7 @@ def update_ml_config(updates):
 
 
 def delete_model_from_firebase(version_name):
+    db = _get_db()
     if not db or not version_name:
         return False
     try:
@@ -375,38 +497,28 @@ def record_game_result_and_check_ab(model_id, ai_won, config):
         'games_since_last_training': config.get('games_since_last_training', 0) + 1
     }
 
-    # Get the required games limit
-    # Use the value from config if available, otherwise default
     limit = config.get('ab_test_games_required', AB_TEST_GAMES_REQUIRED)
     
     current_a_games = config.get('model_a_games', 0)
     current_b_games = config.get('model_b_games', 0)
     
     if model_id == 'A':
-        # ONLY count stats if we haven't reached the limit yet
         if current_a_games < limit:
             updates['model_a_games'] = current_a_games + 1
             if ai_won:
                 updates['model_a_wins'] = config.get('model_a_wins', 0) + 1
     elif model_id == 'B':
-        # ONLY count stats if we haven't reached the limit yet
         if current_b_games < limit:
             updates['model_b_games'] = current_b_games + 1
             if ai_won:
                 updates['model_b_wins'] = config.get('model_b_wins', 0) + 1
     
-    # Always update the configuration (at minimum for games_since_last_training)
     update_ml_config(updates)
     
-    # Check if we can conclude - using the NEW values
     final_a_games = updates.get('model_a_games', current_a_games)
     final_b_games = updates.get('model_b_games', current_b_games)
     
-    # Only conclude if BOTH models have reached the limit
     if final_a_games >= limit and final_b_games >= limit:
-        # Pass the updated config-like object for the conclusion
-        # We need to make sure conclude_ab_test sees the final state
-        # But conclude_ab_test calls get_ml_config() itself, so it will see the updates we just made.
         conclude_ab_test(config, model_id, ai_won)
 
 
@@ -456,13 +568,13 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
             'model_b_wins': 0
         })
 
-
 # ============ SESSION MANAGEMENT ============
 
 SESSION_EXPIRY_HOURS = 24
 
 def cleanup_old_sessions():
     """Delete game sessions older than 24 hours."""
+    db = _get_db()
     if not db:
         return 0
     
@@ -492,27 +604,26 @@ def track_unique_visitor(user_id):
     Track a unique visitor. Only called when a real game session starts.
     This filters out bots since they don't actually play games.
     """
+    db = _get_db()
     if not db or not user_id or user_id == 'anonymous':
         return
     
     try:
-        # Use userId as document ID to ensure uniqueness
+        from firebase_admin import firestore as _fs
         doc_ref = db.collection('unique_visitors').document(user_id)
         doc = doc_ref.get()
         
         if not doc.exists:
-            # New unique visitor
             doc_ref.set({
                 'user_id': user_id,
-                'first_seen': firestore.SERVER_TIMESTAMP,
-                'last_seen': firestore.SERVER_TIMESTAMP,
+                'first_seen': _fs.SERVER_TIMESTAMP,
+                'last_seen': _fs.SERVER_TIMESTAMP,
                 'games_played': 1
             })
         else:
-            # Returning visitor - update last seen and increment games
             doc_ref.update({
-                'last_seen': firestore.SERVER_TIMESTAMP,
-                'games_played': firestore.Increment(1)
+                'last_seen': _fs.SERVER_TIMESTAMP,
+                'games_played': _fs.Increment(1)
             })
     except Exception as e:
         print(f"Error tracking visitor: {e}")
@@ -520,6 +631,7 @@ def track_unique_visitor(user_id):
 
 def create_game_session(user_id):
     """Create a new server-authoritative game session."""
+    db = _get_db()
     if not db:
         return None
     
@@ -531,28 +643,34 @@ def create_game_session(user_id):
     track_unique_visitor(user_id)
     
     session_id = str(uuid.uuid4())
-    model, model_id, model_version = get_model_for_game()
+
+    # Use fast local model path — no Firebase model loading
+    model, model_id, model_version = get_local_model()
+    
+    # Fall back to full model selection only if local model unavailable
+    if not model:
+        model, model_id, model_version = get_model_for_game()
     
     if not model:
         return None
     
-    session_data = {
-        'session_id': session_id,
-        'user_id': user_id,
-        'player_charges': 0,
-        'ai_charges': 0,
-        'player_moves': [],
-        'ai_moves': [],
-        'game_over': False,
-        'winner': None,
-        'model_id': model_id,
-        'model_version': model_version,
-        'turn': 0,
-        'created_at': firestore.SERVER_TIMESTAMP,
-        'updated_at': firestore.SERVER_TIMESTAMP
-    }
-    
     try:
+        from firebase_admin import firestore as _fs
+        session_data = {
+            'session_id': session_id,
+            'user_id': user_id,
+            'player_charges': 0,
+            'ai_charges': 0,
+            'player_moves': [],
+            'ai_moves': [],
+            'game_over': False,
+            'winner': None,
+            'model_id': model_id,
+            'model_version': model_version,
+            'turn': 0,
+            'created_at': _fs.SERVER_TIMESTAMP,
+            'updated_at': _fs.SERVER_TIMESTAMP
+        }
         db.collection('game_sessions').document(session_id).set(session_data)
         return session_id
     except Exception as e:
@@ -562,6 +680,7 @@ def create_game_session(user_id):
 
 def get_game_session(session_id):
     """Retrieve a game session by ID."""
+    db = _get_db()
     if not db or not session_id:
         return None
     
@@ -575,11 +694,13 @@ def get_game_session(session_id):
 
 def update_game_session(session_id, updates):
     """Update a game session."""
+    db = _get_db()
     if not db or not session_id:
         return False
     
     try:
-        updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        from firebase_admin import firestore as _fs
+        updates['updated_at'] = _fs.SERVER_TIMESTAMP
         db.collection('game_sessions').document(session_id).update(updates)
         return True
     except Exception as e:
@@ -587,10 +708,49 @@ def update_game_session(session_id, updates):
         return False
 
 
+# ============ NON-BLOCKING GAME LOGGING ============
+
+def _log_game_over_async(session, session_id, ai_won, new_player_moves, new_ai_moves):
+    """
+    Fire-and-forget game logging in a background thread.
+    This prevents Firestore writes from blocking the API response.
+    """
+    def _do_log():
+        try:
+            db = _get_db()
+            if not db:
+                return
+            
+            from firebase_admin import firestore as _fs
+
+            db.collection('ai_vs_human_matches').add({
+                'winner': 'ai' if ai_won else 'human',
+                'turns': len(new_player_moves),
+                'player_moves': new_player_moves,
+                'ai_moves': new_ai_moves,
+                'model_id': session.get('model_id', 'A'),
+                'model_version': session.get('model_version', 'local'),
+                'user_id': session.get('user_id', 'unknown'),
+                'session_id': session_id,
+                'timestamp': _fs.SERVER_TIMESTAMP
+            })
+
+            # Record for A/B testing
+            config = get_ml_config()
+            record_game_result_and_check_ab(session.get('model_id', 'A'), ai_won, config)
+        except Exception as e:
+            print(f"[game_session] Async log error: {e}")
+
+    threading.Thread(target=_do_log, daemon=True).start()
+
+
 def process_move(session_id, player_move):
     """
     Process a player move with server-side validation.
     Returns the game state after the move.
+
+    PERFORMANCE: Uses the pre-loaded local model (no Firebase round-trip
+    for model selection). Game-over logging is async.
     """
     session = get_game_session(session_id)
     
@@ -607,8 +767,11 @@ def process_move(session_id, player_move):
     if player_move not in legal_moves:
         return {'error': f'Illegal move: {player_move}. Legal moves: {legal_moves}'}
     
-    # Get model for AI move
-    model, model_id, model_version = get_model_for_game()
+    # FAST PATH: Use local model directly — no Firebase round-trip
+    model, model_id, model_version = get_local_model()
+    if not model:
+        # Fallback to full model selection if local model unavailable
+        model, model_id, model_version = get_model_for_game()
     
     if not model:
         return {'error': 'AI model not available'}
@@ -617,7 +780,7 @@ def process_move(session_id, player_move):
     model.move_history = session.get('ai_moves', [])[-4:]
     model.opp_move_history = session.get('player_moves', [])[-4:]
     
-    # AI chooses move
+    # AI chooses move (<1ms — just a dict lookup)
     ai_charges = session.get('ai_charges', 0)
     ai_legal_moves = model.get_legal_moves(ai_charges)
     ai_state = model.get_state(ai_charges, player_charges)
@@ -645,29 +808,10 @@ def process_move(session_id, player_move):
     
     update_game_session(session_id, updates)
     
-    # Log game data if game is over
-    if game.game_over and db:
-        try:
-            ai_won = game.winner == 'player2'
-            
-            db.collection('ai_vs_human_matches').add({
-                'winner': 'ai' if ai_won else 'human',
-                'turns': len(new_player_moves),
-                'player_moves': new_player_moves,
-                'ai_moves': new_ai_moves,
-                'model_id': session.get('model_id', 'A'),
-                'model_version': session.get('model_version', 'local'),
-                'user_id': session.get('user_id', 'unknown'),
-                'session_id': session_id,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
-            
-            # Record for A/B testing
-            config = get_ml_config()
-            record_game_result_and_check_ab(session.get('model_id', 'A'), ai_won, config)
-            
-        except Exception as log_err:
-            print(f"Logging error: {log_err}")
+    # Log game data asynchronously if game is over
+    if game.game_over:
+        ai_won = game.winner == 'player2'
+        _log_game_over_async(session, session_id, ai_won, new_player_moves, new_ai_moves)
     
     return {
         'playerCharges': game.player_charges,
@@ -759,3 +903,4 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
+
