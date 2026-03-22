@@ -7,7 +7,6 @@ skills-lock.json
 test_api.py
 fireball.backend/test_api.py
 fireball.backend/train_dmodel.py
-fireball.backend/api/auth.py
 fireball.backend/api/ml_training.py
 
 # env
