@@ -1,6 +1,14 @@
 # Cursor / local agent config (skills, etc.)
 .agent/
 .agents/
+skills-lock.json
+
+# Local / private scripts & API (not published to GitHub)
+test_api.py
+fireball.backend/test_api.py
+fireball.backend/train_dmodel.py
+fireball.backend/api/auth.py
+fireball.backend/api/ml_training.py
 
 # env
 .env
