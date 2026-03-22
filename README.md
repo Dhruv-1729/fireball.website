@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="fireball.backend/banner.png" alt="Fireball" width="600"/>
+  <img src="fireball.frontend/banner.png" alt="Fireball" width="600"/>
 </p>
 
 <p align="center">
   <strong>A turn-based strategy game with a Q-Learning ML Bot.</strong><br/>
-  Charge up, read your opponent, throw fireballs. 
-  "It's easy to learn, but hard to master.
+  Charge up, read your opponent, and throw fireballs. 
+  "It's easy to learn, but hard to master."
 </p>
 
 <p align="center">
