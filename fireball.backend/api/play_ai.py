@@ -62,7 +62,6 @@ class FireballQLearning:
 
     @staticmethod
     def _count_streak(history, move):
-        """Count consecutive occurrences of `move` from the end of history."""
         streak = 0
         for m in reversed(history):
             if m == move:
@@ -72,7 +71,6 @@ class FireballQLearning:
         return streak
 
     def _heuristic_action(self, state, legal_moves):
-        """Pattern-aware heuristic with anti-exploit logic."""
         try:
             parts = state.split('_')
             my_charges = int(parts[1]) if len(parts) > 1 else 0
@@ -179,7 +177,6 @@ class FireballQLearning:
             return False
 
     def load_from_bytes(self, data):
-        """Load model from bytes (for Firebase models)."""
         import gzip
         try:
             if data.startswith(b'\x1f\x8b'):
@@ -222,7 +219,6 @@ class FireballGame:
 
 
 def _load_local_model():
-    """Load the model from the filesystem bundled with the Vercel deployment."""
     model = FireballQLearning(epsilon=0)
     base_dir = os.path.join(os.path.dirname(__file__), '..')
     
@@ -257,7 +253,6 @@ _firebase_init_done = False
 
 
 def _get_db():
-    """Lazy-initialize Firebase and return a Firestore client."""
     global _db, _firebase_init_done
     if _db is not None:
         return _db
@@ -328,7 +323,6 @@ AB_TEST_GAMES_REQUIRED = 15
 
 
 def get_ml_config():
-    """Get ML configuration from Firebase."""
     db = _get_db()
     if not db:
         return None
@@ -342,7 +336,6 @@ def get_ml_config():
 
 
 def update_ml_config(updates):
-    """Update ML configuration in Firebase."""
     db = _get_db()
     if not db:
         return False
@@ -356,7 +349,6 @@ def update_ml_config(updates):
 
 
 def load_model_from_firebase(version_name):
-    """Load a model from Firebase (fallback only)."""
     db = _get_db()
     if not db or not version_name:
         return None
@@ -417,14 +409,6 @@ def load_model_from_firebase(version_name):
 
 
 def get_model_for_game():
-    """
-    Get the appropriate model for a game, handling A/B testing.
-    Returns (model, model_id, version_name) tuple.
-    
-    FAST PATH: If the local model is loaded (the common case), return it
-    immediately with zero network calls. This is the key optimization —
-    warm invocations skip Firebase entirely.
-    """
     if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
         return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
     
@@ -457,7 +441,6 @@ def get_model_for_game():
 
 
 def delete_model_from_firebase(version_name):
-    """Delete a model from Firebase."""
     db = _get_db()
     if not db or not version_name:
         return False
@@ -469,9 +452,6 @@ def delete_model_from_firebase(version_name):
 
 
 def record_game_result_and_check_ab(model_id, ai_won, config):
-    """
-    Record the result of a game for A/B testing and check if test should conclude.
-    """
     if not config or not config.get('ab_test_active'):
         update_ml_config({
             'games_since_last_training': (config.get('games_since_last_training', 0) if config else 0) + 1
@@ -501,7 +481,6 @@ def record_game_result_and_check_ab(model_id, ai_won, config):
 
 
 def conclude_ab_test(config, last_model_id, last_ai_won):
-    """Conclude A/B test and promote winner."""
     config = get_ml_config()
     if not config:
         return
@@ -550,10 +529,6 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
 
 
 def _log_game_data_async(turn_data, match_data=None, model_id=None, config=None, ai_won=None):
-    """
-    Fire-and-forget game logging in a background thread.
-    This prevents Firestore writes from blocking the API response.
-    """
     def _do_log():
         try:
             db = _get_db()
@@ -597,14 +572,6 @@ class handler(BaseHTTPRequestHandler):
             user_id = data.get('userId', 'unknown')
 
             model, model_id, model_version = get_model_for_game()
-            
-            if not model:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": "AI model not found."}).encode())
-                return
 
             game = FireballGame()
             game.player_charges = int(data.get('playerCharges', 0))

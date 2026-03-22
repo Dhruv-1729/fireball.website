@@ -1,12 +1,3 @@
-"""
-ML Management API
-=================
-Provides endpoints for:
-- Checking ML training status
-- Uploading initial model to Firebase
-- Triggering training (when enabled)
-- Viewing A/B test results
-"""
 
 import json
 import os
@@ -30,13 +21,12 @@ try:
 except:
     db = None
 
-TRAINING_ENABLED = True  # Master switch
+TRAINING_ENABLED = True
 GAMES_THRESHOLD_FOR_TRAINING = 200
 AB_TEST_GAMES_REQUIRED = 25
 
 
 def get_ml_config():
-    """Get ML configuration from Firebase."""
     if not db:
         return None
     try:
@@ -67,7 +57,6 @@ def get_ml_config():
 
 
 def update_ml_config(updates):
-    """Update ML configuration in Firebase."""
     if not db:
         return False
     try:
@@ -80,12 +69,11 @@ def update_ml_config(updates):
 
 
 def save_model_to_firebase(model_data, version_name):
-    """Save model bytes to Firebase as base64, chunking if necessary to bypass 1MB limit."""
     if not db:
         return False
     try:
         model_b64 = base64.b64encode(model_data).decode('utf-8')
-        CHUNK_SIZE = 700 * 1024  # 700 KB per chunk (in base64 characters)
+        CHUNK_SIZE = 700 * 1024
         total_chunks = (len(model_b64) + CHUNK_SIZE - 1) // CHUNK_SIZE
         
         db.collection('ml_models').document(version_name).set({
@@ -109,7 +97,6 @@ def save_model_to_firebase(model_data, version_name):
 
 
 def upload_local_model():
-    """Upload the local model.pkl to Firebase as v1_original."""
     model_path = os.path.join(os.path.dirname(__file__), '..', 'model.pkl')
     try:
         with open(model_path, 'rb') as f:
@@ -126,7 +113,6 @@ def upload_local_model():
 
 
 def get_training_data_stats():
-    """Get statistics about available training data."""
     if not db:
         return {'error': 'Database not connected'}
     
@@ -210,7 +196,6 @@ def get_training_data_stats():
 
 
 def get_historical_win_rates(days=180):
-    """Get historical win rate data aggregated by date for charting."""
     if not db:
         return []
     
@@ -262,7 +247,6 @@ def get_historical_win_rates(days=180):
 
 class handler(BaseHTTPRequestHandler):
     def verify_admin_token(self):
-        """Verify the admin token from Authorization header."""
         import hashlib
         from datetime import datetime, timezone
         
@@ -306,7 +290,6 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        """GET request returns current ML status."""
         if not self.verify_admin_token():
             self.send_response(401)
             self.send_header('Content-type', 'application/json')
@@ -355,7 +338,6 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
     def do_POST(self):
-        """POST request for actions."""
         if not self.verify_admin_token():
             self.send_response(401)
             self.send_header('Content-type', 'application/json')
@@ -376,11 +358,8 @@ class handler(BaseHTTPRequestHandler):
                 response = {'success': success, 'message': message}
                 
             elif action == 'enable_training':
-                if not TRAINING_ENABLED:
-                    response = {'success': False, 'message': 'Training is disabled by master switch in code'}
-                else:
-                    update_ml_config({'training_enabled': True})
-                    response = {'success': True, 'message': 'Training enabled'}
+                update_ml_config({'training_enabled': True})
+                response = {'success': True, 'message': 'Training enabled'}
                     
             elif action == 'disable_training':
                 update_ml_config({'training_enabled': False})
@@ -406,53 +385,46 @@ class handler(BaseHTTPRequestHandler):
                 response = {'success': True, 'message': 'A/B test cancelled'}
             
             elif action == 'manually_conclude_ab_test':
-                winner = data.get('winner')  # 'A' or 'B'
+                winner = data.get('winner')
+                config = get_ml_config()
+                current_version = config.get('current_model_version')
+                challenger_version = config.get('challenger_model_version')
                 
-                if winner not in ['A', 'B']:
-                    response = {'success': False, 'error': 'Winner must be "A" or "B"'}
+                if winner == 'B':
+                    if current_version and current_version != 'v1_original':
+                        db.collection('ml_models').document(current_version).delete()
+                    
+                    update_ml_config({
+                        'current_model_version': challenger_version,
+                        'challenger_model_version': None,
+                        'ab_test_active': False,
+                        'model_a_games': 0,
+                        'model_a_wins': 0,
+                        'model_b_games': 0,
+                        'model_b_wins': 0
+                    })
+                    response = {
+                        'success': True, 
+                        'message': f'Model B ({challenger_version}) promoted to current model',
+                        'winner': 'B'
+                    }
                 else:
-                    config = get_ml_config()
-                    if not config or not config.get('ab_test_active'):
-                        response = {'success': False, 'error': 'No active A/B test'}
-                    else:
-                        current_version = config.get('current_model_version')
-                        challenger_version = config.get('challenger_model_version')
-                        
-                        if winner == 'B':
-                            if current_version and current_version != 'v1_original':
-                                db.collection('ml_models').document(current_version).delete()
-                            
-                            update_ml_config({
-                                'current_model_version': challenger_version,
-                                'challenger_model_version': None,
-                                'ab_test_active': False,
-                                'model_a_games': 0,
-                                'model_a_wins': 0,
-                                'model_b_games': 0,
-                                'model_b_wins': 0
-                            })
-                            response = {
-                                'success': True, 
-                                'message': f'Model B ({challenger_version}) promoted to current model',
-                                'winner': 'B'
-                            }
-                        else:  # winner == 'A'
-                            if challenger_version:
-                                db.collection('ml_models').document(challenger_version).delete()
-                            
-                            update_ml_config({
-                                'challenger_model_version': None,
-                                'ab_test_active': False,
-                                'model_a_games': 0,
-                                'model_a_wins': 0,
-                                'model_b_games': 0,
-                                'model_b_wins': 0
-                            })
-                            response = {
-                                'success': True,
-                                'message': f'Model A ({current_version}) remains as current model',
-                                'winner': 'A'
-                            }
+                    if challenger_version:
+                        db.collection('ml_models').document(challenger_version).delete()
+                    
+                    update_ml_config({
+                        'challenger_model_version': None,
+                        'ab_test_active': False,
+                        'model_a_games': 0,
+                        'model_a_wins': 0,
+                        'model_b_games': 0,
+                        'model_b_wins': 0
+                    })
+                    response = {
+                        'success': True,
+                        'message': f'Model A ({current_version}) remains as current model',
+                        'winner': 'A'
+                    }
                 
             elif action == 'update_thresholds':
                 updates = {}
@@ -482,76 +454,47 @@ class handler(BaseHTTPRequestHandler):
                 total_chunks = data.get('total_chunks')
                 chunk_data = data.get('chunk_data')
                 
-                if not version_name or chunk_index is None or not chunk_data or not total_chunks:
-                    response = {'success': False, 'error': 'Missing chunk data'}
+                db.collection('ml_models').document(f"{version_name}_chunk_{chunk_index}").set({
+                    'data': chunk_data,
+                    'chunk_index': chunk_index
+                })
+                
+                if chunk_index == total_chunks - 1:
+                    db.collection('ml_models').document(version_name).set({
+                        'chunked': True,
+                        'total_chunks': total_chunks,
+                        'created_at': firestore.SERVER_TIMESTAMP,
+                        'version': version_name
+                    })
+                    response = {'success': True, 'message': f'Model {version_name} fully uploaded!'}
                 else:
-                    try:
-                        db.collection('ml_models').document(f"{version_name}_chunk_{chunk_index}").set({
-                            'data': chunk_data,
-                            'chunk_index': chunk_index
-                        })
-                        
-                        if chunk_index == total_chunks - 1:
-                            db.collection('ml_models').document(version_name).set({
-                                'chunked': True,
-                                'total_chunks': total_chunks,
-                                'created_at': firestore.SERVER_TIMESTAMP,
-                                'version': version_name
-                            })
-                            response = {'success': True, 'message': f'Model {version_name} fully uploaded!'}
-                        else:
-                            response = {'success': True, 'message': f'Chunk {chunk_index+1}/{total_chunks} OK'}
-                    except Exception as e:
-                        response = {'success': False, 'error': str(e)}
+                    response = {'success': True, 'message': f'Chunk {chunk_index+1}/{total_chunks} OK'}
             
             elif action == 'start_ab_test':
                 challenger_version = data.get('challenger_version')
-                
-                if not challenger_version:
-                    response = {'success': False, 'error': 'challenger_version required'}
-                else:
-                    model_doc = db.collection('ml_models').document(challenger_version).get()
-                    if not model_doc.exists:
-                        response = {'success': False, 'error': f'Model {challenger_version} not found'}
-                    else:
-                        update_ml_config({
-                            'challenger_model_version': challenger_version,
-                            'ab_test_active': True,
-                            'model_a_games': 0,
-                            'model_a_wins': 0,
-                            'model_b_games': 0,
-                            'model_b_wins': 0
-                        })
-                        response = {
-                            'success': True, 
-                            'message': f'A/B test started with challenger: {challenger_version}',
-                            'note': 'Bypassed 200 game requirement as requested'
-                        }
+                update_ml_config({
+                    'challenger_model_version': challenger_version,
+                    'ab_test_active': True,
+                    'model_a_games': 0,
+                    'model_a_wins': 0,
+                    'model_b_games': 0,
+                    'model_b_wins': 0
+                })
+                response = {
+                    'success': True, 
+                    'message': f'A/B test started with challenger: {challenger_version}'
+                }
             
             elif action == 'override_model':
                 version_name = data.get('version_name')
-                if not version_name:
-                    response = {'success': False, 'error': 'version_name required'}
-                else:
-                    model_doc = db.collection('ml_models').document(version_name).get()
-                    if not model_doc.exists:
-                        response = {'success': False, 'error': f'Model {version_name} not found'}
-                    else:
-                        update_ml_config({
-                            'current_model_version': version_name,
-                            'ab_test_active': False
-                        })
-                        response = {
-                            'success': True,
-                            'message': f'Successfully forcefully overridden current model to {version_name}'
-                        }
-                
-            else:
-                response = {'error': f'Unknown action: {action}', 'available_actions': [
-                    'upload_original', 'enable_training', 'disable_training',
-                    'reset_game_counter', 'cancel_ab_test', 'manually_conclude_ab_test',
-                    'update_thresholds', 'get_models', 'upload_model', 'start_ab_test'
-                ]}
+                update_ml_config({
+                    'current_model_version': version_name,
+                    'ab_test_active': False
+                })
+                response = {
+                    'success': True,
+                    'message': f'Overridden current model to {version_name}'
+                }
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')

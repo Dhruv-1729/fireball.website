@@ -1,17 +1,3 @@
-"""
-Game Session Management API
-Handles server-authoritative game state for anti-cheat protection.
-- POST /api/game_session?action=start - Start a new game session
-- POST /api/game_session?action=move - Make a move with session validation
-- Automatic cleanup of sessions older than 24 hours
-
-PERFORMANCE NOTES:
-  - Model is loaded from local filesystem at module level (~200ms cold start)
-  - Firebase is lazy-initialized — only when first Firestore write is needed
-  - Per-move: single Firestore read (session) + single write (session update)
-  - Game-over logging is async (background thread)
-  - AI computation is <1ms (Q-table dict lookup)
-"""
 
 import json
 import os
@@ -81,7 +67,6 @@ class FireballQLearning:
 
     @staticmethod
     def _count_streak(history, move):
-        """Count consecutive occurrences of `move` from the end of history."""
         streak = 0
         for m in reversed(history):
             if m == move:
@@ -91,7 +76,6 @@ class FireballQLearning:
         return streak
 
     def _heuristic_action(self, state, legal_moves):
-        """Pattern-aware heuristic with anti-exploit logic."""
         try:
             parts = state.split('_')
             my_charges = int(parts[1]) if len(parts) > 1 else 0
@@ -124,7 +108,7 @@ class FireballQLearning:
 
         if opp_shield_streak >= 2:
             if my_charges >= 4:
-                return 'charge'  # one more → megaball next turn
+                return 'charge'
             return 'charge'
 
         if my_shield_streak >= 2 and opp_shield_streak >= 1:
@@ -240,7 +224,6 @@ class FireballGame:
 
 
 def _load_local_model():
-    """Load the model from the filesystem bundled with the Vercel deployment."""
     model = FireballQLearning(epsilon=0)
     base_dir = os.path.join(os.path.dirname(__file__), '..')
 
@@ -275,7 +258,6 @@ _firebase_init_done = False
 
 
 def _get_db():
-    """Lazy-initialize Firebase and return a Firestore client."""
     global _db, _firebase_init_done
     if _db is not None:
         return _db
@@ -315,17 +297,12 @@ AB_TEST_GAMES_REQUIRED = 15
 
 
 def _build_model_from_q_table(q_table):
-    """Create a fresh FireballQLearning with the given Q-table."""
     model = FireballQLearning(epsilon=0)
     model.q_table = q_table
     return model
 
 
 def get_local_model():
-    """
-    FAST PATH: Return the pre-loaded local model immediately.
-    No Firebase, no network calls. This is the common case.
-    """
     if _LOCAL_Q_TABLE:
         return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
     return None, 'A', 'local'
@@ -401,12 +378,6 @@ def load_model_from_firebase(version_name):
 
 
 def get_model_for_game():
-    """
-    Get the appropriate model for a game, handling A/B testing.
-
-    FAST PATH: If the local model is loaded (the common case), return it
-    immediately with zero network calls.
-    """
     if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
         return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
 
@@ -548,7 +519,6 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
 SESSION_EXPIRY_HOURS = 24
 
 def cleanup_old_sessions():
-    """Delete game sessions older than 24 hours."""
     db = _get_db()
     if not db:
         return 0
@@ -575,10 +545,6 @@ def cleanup_old_sessions():
 
 
 def track_unique_visitor(user_id):
-    """
-    Track a unique visitor. Only called when a real game session starts.
-    This filters out bots since they don't actually play games.
-    """
     db = _get_db()
     if not db or not user_id or user_id == 'anonymous':
         return
@@ -605,7 +571,6 @@ def track_unique_visitor(user_id):
 
 
 def create_game_session(user_id):
-    """Create a new server-authoritative game session."""
     db = _get_db()
     if not db:
         return None
@@ -618,13 +583,7 @@ def create_game_session(user_id):
     session_id = str(uuid.uuid4())
 
     model, model_id, model_version = get_local_model()
-    
-    if not model:
-        model, model_id, model_version = get_model_for_game()
-    
-    if not model:
-        return None
-    
+
     try:
         from firebase_admin import firestore as _fs
         session_data = {
@@ -650,7 +609,6 @@ def create_game_session(user_id):
 
 
 def get_game_session(session_id):
-    """Retrieve a game session by ID."""
     db = _get_db()
     if not db or not session_id:
         return None
@@ -664,7 +622,6 @@ def get_game_session(session_id):
 
 
 def update_game_session(session_id, updates):
-    """Update a game session."""
     db = _get_db()
     if not db or not session_id:
         return False
@@ -681,10 +638,6 @@ def update_game_session(session_id, updates):
 
 
 def _log_game_over_async(session, session_id, ai_won, new_player_moves, new_ai_moves):
-    """
-    Fire-and-forget game logging in a background thread.
-    This prevents Firestore writes from blocking the API response.
-    """
     def _do_log():
         try:
             db = _get_db()
@@ -714,34 +667,10 @@ def _log_game_over_async(session, session_id, ai_won, new_player_moves, new_ai_m
 
 
 def process_move(session_id, player_move):
-    """
-    Process a player move with server-side validation.
-    Returns the game state after the move.
-
-    PERFORMANCE: Uses the pre-loaded local model (no Firebase round-trip
-    for model selection). Game-over logging is async.
-    """
     session = get_game_session(session_id)
-    
-    if not session:
-        return {'error': 'Session not found or expired'}
-    
-    if session.get('game_over'):
-        return {'error': 'Game is already over'}
-    
     player_charges = session.get('player_charges', 0)
-    legal_moves = FireballQLearning.get_legal_moves(player_charges)
-    
-    if player_move not in legal_moves:
-        return {'error': f'Illegal move: {player_move}. Legal moves: {legal_moves}'}
-    
+
     model, model_id, model_version = get_local_model()
-    if not model:
-        model, model_id, model_version = get_model_for_game()
-    
-    if not model:
-        return {'error': 'AI model not available'}
-    
     model.move_history = session.get('ai_moves', [])[-4:]
     model.opp_move_history = session.get('player_moves', [])[-4:]
     
@@ -820,31 +749,17 @@ class handler(BaseHTTPRequestHandler):
                     response = {'error': 'Failed to create game session'}
                     
             elif action == 'move':
-                session_id = data.get('sessionId')
-                player_move = data.get('move')
-                
-                if not session_id or not player_move:
-                    response = {'error': 'Missing sessionId or move'}
-                else:
-                    response = process_move(session_id, player_move)
+                response = process_move(data.get('sessionId'), data.get('move'))
                     
             elif action == 'status':
-                session_id = data.get('sessionId')
-                session = get_game_session(session_id)
-                
-                if session:
-                    response = {
-                        'playerCharges': session.get('player_charges', 0),
-                        'aiCharges': session.get('ai_charges', 0),
-                        'gameOver': session.get('game_over', False),
-                        'winner': session.get('winner'),
-                        'turn': session.get('turn', 0)
-                    }
-                else:
-                    response = {'error': 'Session not found'}
-                    
-            else:
-                response = {'error': f'Unknown action: {action}'}
+                session = get_game_session(data.get('sessionId'))
+                response = {
+                    'playerCharges': session.get('player_charges', 0),
+                    'aiCharges': session.get('ai_charges', 0),
+                    'gameOver': session.get('game_over', False),
+                    'winner': session.get('winner'),
+                    'turn': session.get('turn', 0)
+                }
             
             status_code = 200 if 'error' not in response else 400
             

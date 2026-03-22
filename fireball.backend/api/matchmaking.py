@@ -58,6 +58,7 @@ class handler(BaseHTTPRequestHandler):
             post_body = self.rfile.read(content_len)
             data = json.loads(post_body)
             action = data.get('action')
+            result = {}
 
             if action == 'heartbeat':
                 result = self.heartbeat(data)
@@ -75,32 +76,21 @@ class handler(BaseHTTPRequestHandler):
                 result = self.leave_queue(data)
             elif action == 'terminate_match':
                 result = self.terminate_match(data)
-            else:
-                result = {'error': 'Unknown action'}
-
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
-            
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
 
-
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
-            
             self.send_header('Access-Control-Allow-Origin', '*')
-
-
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
     def heartbeat(self, data):
         player_id = data.get('playerId')
-        if not player_id:
-            return {'error': 'No playerId'}
-
         ip = self.headers.get('X-Forwarded-For', '').split(',')[0].strip()
         if not ip:
             ip = self.headers.get('X-Real-IP', '').strip()
@@ -242,10 +232,8 @@ class handler(BaseHTTPRequestHandler):
 
             if match['player1'] == player_id:
                 player_field = 'player1_move'
-            elif match['player2'] == player_id:
-                player_field = 'player2_move'
             else:
-                return {'error': 'Not a participant'}
+                player_field = 'player2_move'
 
             match[player_field] = move
 

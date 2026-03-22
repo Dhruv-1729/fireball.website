@@ -24,7 +24,6 @@ except:
 
 
 def verify_admin_token(token):
-    """Verify an admin session token."""
     if not db or not token:
         return False
     
@@ -166,7 +165,7 @@ class handler(BaseHTTPRequestHandler):
             avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
             online_games = []
-            games_to_delete = []  # Track games with N/A moves to delete
+            games_to_delete = []
             try:
                 target_statuses = ["finished", "terminated", "disconnected"]
                 results = []
