@@ -9,7 +9,6 @@ from http.server import BaseHTTPRequestHandler
 
 PST = timezone(timedelta(hours=-8))
 
-# Initialize Firebase
 if not firebase_admin._apps:
     try:
         service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
@@ -41,7 +40,6 @@ def verify_admin_token(token):
         if not session.get('valid', False):
             return False
         
-        # Check expiry
         expires_at = session.get('expires_at')
         if expires_at:
             if hasattr(expires_at, 'timestamp'):
@@ -66,7 +64,6 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        # Verify admin token
         auth_header = self.headers.get('Authorization', '')
         token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else ''
         
@@ -87,16 +84,13 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            # Cutoff date: January 1, 2026 00:00:00 UTC
             cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
             
-            # Get Unique Visitors (efficiently) - no date filter as we want total unique
             try:
                 unique_visitor_count = db.collection("unique_visitors").count().get()[0][0].value
             except:
                 unique_visitor_count = 0
 
-            # Get AI vs Human Games with full details (last 100 only, from 2026 onwards)
             ai_games = []
             try:
                 matches_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
@@ -107,7 +101,6 @@ class handler(BaseHTTPRequestHandler):
                     ts_str = ''
                     if timestamp:
                         try:
-                            # Convert to PST
                             if hasattr(timestamp, 'astimezone'):
                                 pst_time = timestamp.astimezone(PST)
                             else:
@@ -129,17 +122,13 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 print(f"AI games error: {e}")
 
-            # Calculate AI stats
             display_ai_games = len(ai_games)
             ai_wins = sum(1 for g in ai_games if g['winner'] == 'ai')
             total_turns = sum(g['turns'] for g in ai_games)
             
-            # Get TOTAL count and GLOBAL win rate - only from 2026 onwards
-            # Use single-field query on timestamp, then filter winner in Python to avoid composite index
             total_ai_games = 0
             win_rate = 0
             try:
-                # Single-field query - no composite index needed
                 all_games_ref = db.collection("ai_vs_human_matches").where("timestamp", ">=", cutoff_date).stream()
                 all_games_list = list(all_games_ref)
                 total_ai_games = len(all_games_list)
@@ -148,7 +137,6 @@ class handler(BaseHTTPRequestHandler):
                 print(f"AI stats success: {total_ai_games} games, {total_ai_wins} wins")
             except Exception as count_err:
                 print(f"AI stats query failed: {count_err}")
-                # Ultimate fallback: get all AI games and filter by timestamp in Python
                 try:
                     all_games_ref = db.collection("ai_vs_human_matches").stream()
                     for doc in all_games_ref:
@@ -177,21 +165,16 @@ class handler(BaseHTTPRequestHandler):
             
             avg_length = total_turns / display_ai_games if display_ai_games > 0 else 0
 
-            # Get Online/1v1 Games with full details (from 2026 onwards)
             online_games = []
             games_to_delete = []  # Track games with N/A moves to delete
             try:
-                # Get finished, terminated or disconnected matches from 2026 onwards
-                # Use single-field query on created_at, then filter status in Python to avoid composite index
                 target_statuses = ["finished", "terminated", "disconnected"]
                 results = []
                 try:
                     matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).order_by("created_at", direction=firestore.Query.DESCENDING).limit(200).stream()
-                    # Filter by status in Python to avoid composite index requirement
                     results = [doc for doc in matches_ref if doc.to_dict().get('status') in target_statuses][:100]
                 except Exception as e:
                     print(f"Order query failed, trying without order: {e}")
-                    # Fallback: no ordering (avoids ordering index requirement)
                     matches_ref = db.collection("matches").where("created_at", ">=", cutoff_date).stream()
                     results = sorted([doc for doc in matches_ref if doc.to_dict().get('status') in target_statuses], 
                                    key=lambda d: d.to_dict().get('created_at', 0) if d.to_dict().get('created_at') else 0, 
@@ -200,11 +183,9 @@ class handler(BaseHTTPRequestHandler):
                 for doc in results:
                     match = doc.to_dict()
                     
-                    # Check if both players have empty/N/A moves
                     p1_moves = match.get('player1_moves', [])
                     p2_moves = match.get('player2_moves', [])
                     
-                    # If both are empty/None/N/A, mark for deletion and skip
                     if (not p1_moves or p1_moves == ['N/A'] or p1_moves == []) and \
                        (not p2_moves or p2_moves == ['N/A'] or p2_moves == []):
                         games_to_delete.append(doc.id)
@@ -214,7 +195,6 @@ class handler(BaseHTTPRequestHandler):
                     ts_str = ''
                     if timestamp:
                         try:
-                            # Convert to PST
                             if hasattr(timestamp, 'astimezone'):
                                 pst_time = timestamp.astimezone(PST)
                             else:
@@ -240,7 +220,6 @@ class handler(BaseHTTPRequestHandler):
                         'status': match.get('status', 'finished')
                     })
                 
-                # Delete games with N/A moves for both players
                 for game_id in games_to_delete:
                     try:
                         db.collection("matches").document(game_id).delete()
@@ -252,16 +231,13 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 print(f"Online games retrieval error: {e}")
 
-            # Get total online games count - use single-field query and filter status in Python
             total_online_count = 0
             try:
-                # Single-field query on created_at, filter status in Python to avoid composite index
                 online_ref = db.collection("matches").where("created_at", ">=", cutoff_date).stream()
                 total_online_count = sum(1 for doc in online_ref if doc.to_dict().get('status') == 'finished')
                 print(f"Online count success: {total_online_count} finished games")
             except Exception as online_count_err:
                 print(f"Online count query failed: {online_count_err}")
-                # Ultimate fallback: get all matches and filter in Python
                 try:
                     all_matches = db.collection("matches").stream()
                     for doc in all_matches:
@@ -286,7 +262,6 @@ class handler(BaseHTTPRequestHandler):
                     print(f"CRITICAL: Online count fallback failed: {online_fallback_err}")
                     total_online_count = "ERROR"
 
-            # Get online players with IP and geolocation
             online_players_data = []
             try:
                 import urllib.request
@@ -310,7 +285,6 @@ class handler(BaseHTTPRequestHandler):
                         'lastSeen': ts_str,
                     })
 
-                # Batch geolocate unique IPs via ip-api.com (free, no key needed)
                 private_prefixes = ('127.', '10.', '192.168.', '172.', '::1', '')
                 unique_ips = list({p['ip'] for p in raw_players if p['ip'] and not any(p['ip'].startswith(x) for x in private_prefixes)})
                 geo_map = {}

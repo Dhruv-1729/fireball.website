@@ -5,7 +5,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
 
-# Initialize Firebase
 if not firebase_admin._apps:
     try:
         service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
@@ -102,7 +101,6 @@ class handler(BaseHTTPRequestHandler):
         if not player_id:
             return {'error': 'No playerId'}
 
-        # Capture real client IP from Vercel's proxy headers
         ip = self.headers.get('X-Forwarded-For', '').split(',')[0].strip()
         if not ip:
             ip = self.headers.get('X-Real-IP', '').strip()
@@ -120,7 +118,6 @@ class handler(BaseHTTPRequestHandler):
     def get_online_count(self):
         cutoff = time.time() - 10
         
-        # Firestore timestamp comparison
         from datetime import datetime, timezone
         cutoff_dt = datetime.fromtimestamp(cutoff, tz=timezone.utc)
         
@@ -129,7 +126,6 @@ class handler(BaseHTTPRequestHandler):
             count = sum(1 for _ in players)
             return {'count': count}
         except:
-            # Fallback: count all recent documents
             players = db.collection('online_players').stream()
             now = time.time()
             count = 0
@@ -151,7 +147,6 @@ class handler(BaseHTTPRequestHandler):
 
         queue_ref = db.collection('matchmaking_queue')
 
-        # Check if already in queue
         existing = list(queue_ref.where('playerId', '==', player_id).limit(1).stream())
         for doc in existing:
             entry = doc.to_dict()
@@ -165,7 +160,6 @@ class handler(BaseHTTPRequestHandler):
                     return {'status': 'matched', 'matchId': match_id, 'opponent': opponent}
             return {'status': 'waiting', 'queueId': doc.id}
 
-        # Look for an opponent
         waiting_players = list(queue_ref.where('status', '==', 'waiting').limit(10).stream())
 
         for opponent_doc in waiting_players:
@@ -199,7 +193,6 @@ class handler(BaseHTTPRequestHandler):
 
                 return {'status': 'matched', 'matchId': match_id, 'opponent': opponent['username']}
 
-        # No opponent found - add to queue
         queue_entry = {
             'playerId': player_id,
             'username': username,
@@ -254,11 +247,9 @@ class handler(BaseHTTPRequestHandler):
             else:
                 return {'error': 'Not a participant'}
 
-            # Set the move in our local copy to check if both are in
             match[player_field] = move
 
             if match['player1_move'] and match['player2_move']:
-                # Both moves submitted — resolve the turn atomically
                 p1_move = match['player1_move']
                 p2_move = match['player2_move']
 
@@ -302,7 +293,6 @@ class handler(BaseHTTPRequestHandler):
                     }
                 }
             else:
-                # Only this player's move so far
                 transaction.update(match_ref, {player_field: move})
                 return {'status': 'waiting_for_opponent'}
 
@@ -321,7 +311,6 @@ class handler(BaseHTTPRequestHandler):
 
         winner = determine_winner(p1_move, p2_move)
 
-        # Append moves to history
         p1_moves_history = match.get('player1_moves', []) + [p1_move]
         p2_moves_history = match.get('player2_moves', []) + [p2_move]
 
@@ -365,8 +354,6 @@ class handler(BaseHTTPRequestHandler):
 
         match = match_doc.to_dict()
 
-        # Safety net: if both moves are in but the turn was never resolved
-        # (e.g. due to a past race condition), resolve it now
         if match.get('player1_move') and match.get('player2_move') and match.get('status') == 'active':
             self.resolve_turn(match_ref, match)
             match = match_ref.get().to_dict()
@@ -374,7 +361,6 @@ class handler(BaseHTTPRequestHandler):
         is_player1 = match['player1'] == player_id
         opponent_submitted = (match['player2_move'] is not None) if is_player1 else (match['player1_move'] is not None)
         
-        # Determine if current player won
         winner = match.get('winner')
         did_i_win = None
         if winner:

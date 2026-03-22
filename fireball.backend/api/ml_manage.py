@@ -17,7 +17,6 @@ from firebase_admin import credentials, firestore
 from http.server import BaseHTTPRequestHandler
 from collections import defaultdict
 
-# Initialize Firebase
 if not firebase_admin._apps:
     try:
         service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT', '{}'))
@@ -31,7 +30,6 @@ try:
 except:
     db = None
 
-# ============ CONFIG CONSTANTS ============
 TRAINING_ENABLED = True  # Master switch
 GAMES_THRESHOLD_FOR_TRAINING = 200
 AB_TEST_GAMES_REQUIRED = 25
@@ -47,7 +45,6 @@ def get_ml_config():
         if doc.exists:
             return doc.to_dict()
         else:
-            # Initialize default config
             default_config = {
                 'training_enabled': TRAINING_ENABLED,
                 'games_since_last_training': 0,
@@ -91,7 +88,6 @@ def save_model_to_firebase(model_data, version_name):
         CHUNK_SIZE = 700 * 1024  # 700 KB per chunk (in base64 characters)
         total_chunks = (len(model_b64) + CHUNK_SIZE - 1) // CHUNK_SIZE
         
-        # Save metadata document
         db.collection('ml_models').document(version_name).set({
             'chunked': True,
             'total_chunks': total_chunks,
@@ -99,7 +95,6 @@ def save_model_to_firebase(model_data, version_name):
             'version': version_name
         })
         
-        # Save individual chunks
         for i in range(total_chunks):
             chunk_data = model_b64[i*CHUNK_SIZE : (i+1)*CHUNK_SIZE]
             db.collection('ml_models').document(f"{version_name}_chunk_{i}").set({
@@ -137,10 +132,8 @@ def get_training_data_stats():
     
     try:
         from datetime import datetime, timezone
-        # Cutoff date: January 1, 2026 00:00:00 UTC
         cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         
-        # Count AI vs Human games from 2026 onwards (single field query - no composite index needed)
         ai_game_count = 0
         ai_wins = 0
         try:
@@ -149,7 +142,6 @@ def get_training_data_stats():
             ai_wins = sum(1 for g in ai_games if g.to_dict().get('winner') == 'ai')
         except Exception as ai_err:
             print(f"AI games query failed: {ai_err}")
-            # Fallback: get all and filter in Python
             try:
                 all_ai_games = list(db.collection('ai_vs_human_matches').stream())
                 for doc in all_ai_games:
@@ -173,16 +165,12 @@ def get_training_data_stats():
             except Exception as fallback_err:
                 print(f"AI games fallback also failed: {fallback_err}")
         
-        # Count online games - avoid compound query, filter status in Python
         online_game_count = 0
         try:
-            # First try single-field query on created_at
             online_games = list(db.collection('matches').where('created_at', '>=', cutoff_date).stream())
-            # Filter by status in Python to avoid composite index requirement
             online_game_count = sum(1 for doc in online_games if doc.to_dict().get('status') == 'finished')
         except Exception as online_err:
             print(f"Online games query failed: {online_err}")
-            # Fallback: get all and filter in Python
             try:
                 all_matches = list(db.collection('matches').stream())
                 for doc in all_matches:
@@ -229,13 +217,10 @@ def get_historical_win_rates(days=180):
     try:
         from datetime import datetime, timezone, timedelta
         
-        # Cutoff date: January 1, 2026 00:00:00 UTC
         cutoff_date = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         
-        # Get all AI games from Jan 1, 2026 onwards
         ai_games = list(db.collection('ai_vs_human_matches').where('timestamp', '>=', cutoff_date).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(2000).stream())
         
-        # Group games by date
         date_stats = {}
         for doc in ai_games:
             game = doc.to_dict()
@@ -244,7 +229,6 @@ def get_historical_win_rates(days=180):
                 continue
             
             try:
-                # Get the date string
                 if hasattr(timestamp, 'date'):
                     date_key = timestamp.date().isoformat()
                 else:
@@ -259,7 +243,6 @@ def get_historical_win_rates(days=180):
             except:
                 continue
         
-        # Convert to list sorted by date
         result = []
         for date_str in sorted(date_stats.keys()):
             stats = date_stats[date_str]
@@ -301,7 +284,6 @@ class handler(BaseHTTPRequestHandler):
             if not session.get('valid', False):
                 return False
             
-            # Check expiry
             expires_at = session.get('expires_at')
             if expires_at:
                 if hasattr(expires_at, 'timestamp'):
@@ -325,7 +307,6 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """GET request returns current ML status."""
-        # Verify admin token
         if not self.verify_admin_token():
             self.send_response(401)
             self.send_header('Content-type', 'application/json')
@@ -375,7 +356,6 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """POST request for actions."""
-        # Verify admin token
         if not self.verify_admin_token():
             self.send_response(401)
             self.send_header('Content-type', 'application/json')
@@ -392,7 +372,6 @@ class handler(BaseHTTPRequestHandler):
             action = data.get('action')
             
             if action == 'upload_original':
-                # Upload local model.pkl to Firebase
                 success, message = upload_local_model()
                 response = {'success': success, 'message': message}
                 
@@ -415,7 +394,6 @@ class handler(BaseHTTPRequestHandler):
                 config = get_ml_config()
                 challenger = config.get('challenger_model_version') if config else None
                 if challenger:
-                    # Delete challenger model
                     db.collection('ml_models').document(challenger).delete()
                 update_ml_config({
                     'challenger_model_version': None,
@@ -428,7 +406,6 @@ class handler(BaseHTTPRequestHandler):
                 response = {'success': True, 'message': 'A/B test cancelled'}
             
             elif action == 'manually_conclude_ab_test':
-                # Manually stop A/B test and choose winner
                 winner = data.get('winner')  # 'A' or 'B'
                 
                 if winner not in ['A', 'B']:
@@ -442,7 +419,6 @@ class handler(BaseHTTPRequestHandler):
                         challenger_version = config.get('challenger_model_version')
                         
                         if winner == 'B':
-                            # Promote challenger
                             if current_version and current_version != 'v1_original':
                                 db.collection('ml_models').document(current_version).delete()
                             
@@ -461,7 +437,6 @@ class handler(BaseHTTPRequestHandler):
                                 'winner': 'B'
                             }
                         else:  # winner == 'A'
-                            # Keep current, delete challenger
                             if challenger_version:
                                 db.collection('ml_models').document(challenger_version).delete()
                             
@@ -490,7 +465,6 @@ class handler(BaseHTTPRequestHandler):
                 response = {'success': True, 'message': 'Thresholds updated', 'updates': updates}
                 
             elif action == 'get_models':
-                # List all models in Firebase
                 models = []
                 docs = db.collection('ml_models').stream()
                 for doc in docs:
@@ -517,7 +491,6 @@ class handler(BaseHTTPRequestHandler):
                             'chunk_index': chunk_index
                         })
                         
-                        # Once the last chunk arrives, set the main document
                         if chunk_index == total_chunks - 1:
                             db.collection('ml_models').document(version_name).set({
                                 'chunked': True,
@@ -532,19 +505,15 @@ class handler(BaseHTTPRequestHandler):
                         response = {'success': False, 'error': str(e)}
             
             elif action == 'start_ab_test':
-                # Manually start A/B test with a specified challenger model
-                # This bypasses the 200 game requirement
                 challenger_version = data.get('challenger_version')
                 
                 if not challenger_version:
                     response = {'success': False, 'error': 'challenger_version required'}
                 else:
-                    # Verify the model exists
                     model_doc = db.collection('ml_models').document(challenger_version).get()
                     if not model_doc.exists:
                         response = {'success': False, 'error': f'Model {challenger_version} not found'}
                     else:
-                        # Start A/B test
                         update_ml_config({
                             'challenger_model_version': challenger_version,
                             'ab_test_active': True,
@@ -564,7 +533,6 @@ class handler(BaseHTTPRequestHandler):
                 if not version_name:
                     response = {'success': False, 'error': 'version_name required'}
                 else:
-                    # Verify the model exists
                     model_doc = db.collection('ml_models').document(version_name).get()
                     if not model_doc.exists:
                         response = {'success': False, 'error': f'Model {version_name} not found'}

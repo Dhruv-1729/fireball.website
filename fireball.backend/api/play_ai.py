@@ -8,7 +8,6 @@ import threading
 from collections import defaultdict
 from http.server import BaseHTTPRequestHandler
 
-# ============ GAME LOGIC (inlined to avoid import issues) ============
 
 class FireballQLearning:
     def __init__(self, epsilon=0.1):
@@ -40,23 +39,17 @@ class FireballQLearning:
             return random.choice(legal_moves)
         
         if state in self.q_table:
-            # SOFTMAX (Boltzmann) Action Selection to fix deterministic exploitation
-            # The Q-value gaps are typically 3-12. With T=3.0, the best move is highly
-            # preferred (e.g. 75-95% probability), but there's a chance to pick the
-            # 2nd best move to avoid playing exactly the same way every time.
             import math
             temperature = 3.0
             
             q_vals = {m: self.q_table[state][m] for m in legal_moves}
             max_q = max(q_vals.values())
             
-            # Use math.exp with (q - max_q) to prevent overflow
             exp_vals = {m: math.exp((q - max_q) / temperature) for m, q in q_vals.items()}
             total_exp = sum(exp_vals.values())
             
             probs = {m: v / total_exp for m, v in exp_vals.items()}
             
-            # Weighted random selection
             r = random.random()
             cumulative = 0.0
             for move, prob in probs.items():
@@ -65,7 +58,6 @@ class FireballQLearning:
                     return move
             return legal_moves[-1]
         
-        # Fallback to strategic heuristics when state not found
         return self._heuristic_action(state, legal_moves)
 
     @staticmethod
@@ -95,14 +87,11 @@ class FireballQLearning:
         opp_shield_streak = self._count_streak(opp_recent, 'shield')
         my_shield_streak = self._count_streak(my_recent, 'shield')
 
-        # 25% aggressive, 75% balanced-but-not-exploitable
         aggressive = random.random() < 0.25
 
-        # === RULE 0: Megaball is an instant win — always use it ===
         if 'megaball' in legal_moves:
             return 'megaball'
 
-        # === RULE 1: Anti charge-spam ===
         if opp_charge_streak >= 2:
             if opp_charges >= 4:
                 if 'iceball' in legal_moves:
@@ -114,17 +103,14 @@ class FireballQLearning:
             if 'iceball' in legal_moves:
                 return 'iceball'
 
-        # === RULE 2: Anti shield-loop ===
         if opp_shield_streak >= 2:
             if my_charges >= 4:
                 return 'charge'
             return 'charge'
 
-        # === RULE 3: Break OUR OWN shield loop ===
         if my_shield_streak >= 2 and opp_shield_streak >= 1:
             return 'charge'
 
-        # === RULE 4: Opponent can megaball (5+ charges) ===
         if opp_charges >= 5:
             if 'iceball' in legal_moves:
                 return 'iceball'
@@ -132,21 +118,18 @@ class FireballQLearning:
                 return 'fireball'
             return 'charge'
 
-        # === RULE 5: Opponent has 0 charges — they MUST charge ===
         if opp_charges == 0:
             if 'fireball' in legal_moves:
                 prob = 0.85 if aggressive else 0.6
                 return 'fireball' if random.random() < prob else 'charge'
             return 'charge'
 
-        # === RULE 6: Opponent just charged last turn (not a streak) ===
         if len(opp_recent) > 0 and opp_recent[-1] == 'charge':
             if 'fireball' in legal_moves:
                 prob = 0.7 if aggressive else 0.45
                 if random.random() < prob:
                     return 'fireball'
 
-        # === STRATEGIC PLAY (mode-dependent) ===
         if aggressive:
             if my_charges > opp_charges and my_charges >= 2:
                 if 'iceball' in legal_moves and random.random() < 0.5:
@@ -237,21 +220,12 @@ class FireballGame:
         return "continue"
 
 
-# ============ LOCAL MODEL LOADING (runs once at module import) ============
-# On Vercel, the module is imported once per Lambda container. This code runs
-# during cold start and persists across warm invocations (~60s idle timeout).
-# Loading the 8.59 MB gzip file from the bundled filesystem is ~2-3s on cold
-# start, but subsequent requests reuse the already-loaded _LOCAL_Q_TABLE at
-# zero cost.
 
 def _load_local_model():
     """Load the model from the filesystem bundled with the Vercel deployment."""
     model = FireballQLearning(epsilon=0)
     base_dir = os.path.join(os.path.dirname(__file__), '..')
     
-    # Try model.pkl.gz first, then model.pkl
-    # Note: model.pkl is itself gzip-compressed (despite the .pkl extension),
-    # and load_from_bytes handles the gzip magic byte detection automatically.
     for filename in ('model.pkl.gz', 'model.pkl'):
         path = os.path.join(base_dir, filename)
         try:
@@ -270,20 +244,12 @@ def _load_local_model():
     return model, False, None
 
 
-# Load once at module level — persists across warm invocations
 ai_player, _model_loaded, _LOCAL_MODEL_PATH = _load_local_model()
 _LOCAL_Q_TABLE = ai_player.q_table if _model_loaded else None
 
-# Default to using the local model. Set PREFER_LOCAL_MODEL=false in Vercel
-# env vars ONLY if you want to force Firebase model loading (e.g. A/B testing).
 _PREFER_LOCAL_MODEL = os.environ.get('PREFER_LOCAL_MODEL', 'true').lower() not in ('0', 'false', 'no')
 
 
-# ============ LAZY FIREBASE INIT (only for game logging) ============
-# Firebase Admin SDK is heavy (~2-3s to initialize). Since we load the model
-# from the local filesystem, we only need Firebase for logging game data.
-# Lazy-init means we don't pay for it until the first log write, and even
-# then it only happens once per container lifetime.
 
 _db = None
 _db_init_lock = threading.Lock()
@@ -297,7 +263,6 @@ def _get_db():
         return _db
     
     with _db_init_lock:
-        # Double-check after acquiring lock
         if _db is not None:
             return _db
         
@@ -327,8 +292,6 @@ def _get_db():
     return _db
 
 
-# ============ MODEL LOADING FROM FIREBASE (fallback only) ============
-# This is only used when PREFER_LOCAL_MODEL is False and we need A/B testing.
 
 _MODEL_CACHE = {}
 _MODEL_CACHE_USED_AT = {}
@@ -361,7 +324,6 @@ def _cache_put(version_name, q_table):
                 _MODEL_CACHE_USED_AT.pop(oldest, None)
 
 
-# A/B Testing thresholds
 AB_TEST_GAMES_REQUIRED = 15
 
 
@@ -463,17 +425,14 @@ def get_model_for_game():
     immediately with zero network calls. This is the key optimization —
     warm invocations skip Firebase entirely.
     """
-    # ── Fast path: local model (no Firebase, no network) ──
     if _PREFER_LOCAL_MODEL and _LOCAL_Q_TABLE:
         return _build_model_from_q_table(_LOCAL_Q_TABLE), 'A', 'local'
     
-    # ── Slow path: Firebase models (for A/B testing scenarios) ──
     config = get_ml_config()
     
     if not config:
         return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
-    # If A/B test is not active, use current model
     if not config.get('ab_test_active') or not config.get('challenger_model_version'):
         current_version = config.get('current_model_version')
         if current_version:
@@ -482,7 +441,6 @@ def get_model_for_game():
                 return model, 'A', current_version
         return (_build_model_from_q_table(_LOCAL_Q_TABLE) if _LOCAL_Q_TABLE else None), 'A', 'local'
     
-    # A/B test is active - randomly assign
     if random.random() < 0.5:
         model = load_model_from_firebase(config.get('current_model_version'))
         if model:
@@ -590,7 +548,6 @@ def conclude_ab_test(config, last_model_id, last_ai_won):
         })
 
 
-# ============ NON-BLOCKING GAME LOGGING ============
 
 def _log_game_data_async(turn_data, match_data=None, model_id=None, config=None, ai_won=None):
     """
@@ -605,17 +562,14 @@ def _log_game_data_async(turn_data, match_data=None, model_id=None, config=None,
             
             from firebase_admin import firestore as _fs
             
-            # Log the turn
             if turn_data:
                 turn_data['timestamp'] = _fs.SERVER_TIMESTAMP
                 db.collection('ai_game_turns').add(turn_data)
             
-            # Log the match result
             if match_data:
                 match_data['timestamp'] = _fs.SERVER_TIMESTAMP
                 db.collection('ai_vs_human_matches').add(match_data)
                 
-                # Record for A/B testing
                 if config is not None and ai_won is not None and model_id:
                     record_game_result_and_check_ab(model_id, ai_won, config)
         except Exception as e:
@@ -624,7 +578,6 @@ def _log_game_data_async(turn_data, match_data=None, model_id=None, config=None,
     threading.Thread(target=_do_log, daemon=True).start()
 
 
-# ============ HTTP HANDLER ============
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -643,7 +596,6 @@ class handler(BaseHTTPRequestHandler):
             player_move = data.get('playerMove')
             user_id = data.get('userId', 'unknown')
 
-            # Get model for this game (fast path: local model, ~0ms)
             model, model_id, model_version = get_model_for_game()
             
             if not model:
@@ -658,7 +610,6 @@ class handler(BaseHTTPRequestHandler):
             game.player_charges = int(data.get('playerCharges', 0))
             game.comp_charges = int(data.get('aiCharges', 0))
 
-            # Restore move history
             model.move_history = data.get('oppMoveHistory', [])
             model.opp_move_history = data.get('moveHistory', [])
 
@@ -668,7 +619,6 @@ class handler(BaseHTTPRequestHandler):
 
             result = game.execute_turn(player_move, ai_move)
 
-            # Build log data and fire-and-forget in background thread
             move_history = data.get('moveHistory', []) + [player_move]
             ai_history = data.get('oppMoveHistory', []) + [ai_move]
 
@@ -698,10 +648,8 @@ class handler(BaseHTTPRequestHandler):
                     'model_version': model_version,
                     'user_id': user_id,
                 }
-                # Only fetch config for A/B test tracking — this is deferred
                 ab_config = 'deferred'
 
-            # Log asynchronously — don't block the response
             def _deferred_log():
                 cfg = None
                 if ab_config == 'deferred':
